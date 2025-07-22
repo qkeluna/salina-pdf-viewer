@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salina PDF Viewer - Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #2563eb;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 16px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-group label {
+            font-weight: 500;
+            color: #555;
+        }
+
+        input[type="file"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+        }
+
+        input[type="text"] {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            min-width: 200px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        button:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .secondary-btn {
+            background: #64748b;
+        }
+
+        .secondary-btn:hover {
+            background: #475569;
+        }
+
+        .success-btn {
+            background: #059669;
+        }
+
+        .success-btn:hover {
+            background: #047857;
+        }
+
+        .danger-btn {
+            background: #dc2626;
+        }
+
+        .danger-btn:hover {
+            background: #b91c1c;
+        }
+
+        .viewer-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-height: 600px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .status {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #f8fafc;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #475569;
+        }
+
+        .search-results {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+
+        .highlight-options {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .color-picker {
+            width: 40px;
+            height: 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* PDF Viewer Styles */
+        .salina-pdf-viewer {
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            overflow: auto;
+            max-height: 70vh;
+        }
+
+        .salina-pdf-page {
+            margin: 10px auto;
+            display: block;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .salina-highlight {
+            pointer-events: auto !important;
+            cursor: pointer;
+        }
+
+        .salina-search-highlight.current {
+            background-color: #f59e0b !important;
+            border: 2px solid #d97706;
+        }
+
+        .demo-features {
+            margin-top: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .feature-card h3 {
+            color: #2563eb;
+            margin-bottom: 10px;
+        }
+
+        .feature-card ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .feature-card li {
+            padding: 5px 0;
+            color: #666;
+        }
+
+        .feature-card li:before {
+            content: "✓ ";
+            color: #059669;
+            font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .control-group {
+                justify-content: space-between;
+            }
+
+            input[type="text"] {
+                min-width: auto;
+                flex: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Salina PDF Viewer Demo</h1>
+            <p>Lightweight, fast, and feature-rich PDF viewer with optimized performance</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="file-input">Load PDF:</label>
+                <input type="file" id="file-input" accept=".pdf" />
+                <button id="load-sample">Load Sample PDF</button>
+            </div>
+
+            <div class="control-group">
+                <label for="search-input">Search:</label>
+                <input type="text" id="search-input" placeholder="Enter search term..." />
+                <button id="search-btn">Search</button>
+                <button id="clear-search" class="secondary-btn">Clear</button>
+            </div>
+
+            <div class="control-group">
+                <button id="prev-page" class="secondary-btn">← Previous</button>
+                <span id="page-info">Page 0 of 0</span>
+                <button id="next-page" class="secondary-btn">Next →</button>
+            </div>
+
+            <div class="control-group">
+                <button id="zoom-out" class="secondary-btn">Zoom Out</button>
+                <span id="zoom-info">100%</span>
+                <button id="zoom-in" class="secondary-btn">Zoom In</button>
+                <button id="fit-width" class="secondary-btn">Fit Width</button>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Highlight Color:</label>
+                <input type="color" id="highlight-color" class="color-picker" value="#ffff00" />
+                <button id="clear-highlights" class="danger-btn">Clear All Highlights</button>
+            </div>
+
+            <div class="control-group">
+                <button id="export-highlights" class="success-btn">Export Highlights</button>
+                <input type="file" id="import-highlights" accept=".json,.csv" style="display: none;" />
+                <button id="import-btn" class="success-btn">Import Highlights</button>
+            </div>
+
+            <div class="control-group">
+                <button id="performance-test" class="secondary-btn">Performance Test</button>
+                <span id="performance-info"></span>
+            </div>
+        </div>
+
+        <div id="status" class="status">
+            <span>Ready to load PDF...</span>
+            <span id="stats"></span>
+        </div>
+
+        <div id="error-message" class="error" style="display: none;"></div>
+        
+        <div id="search-results" class="search-results" style="display: none;">
+            <strong>Search Results:</strong> <span id="search-count">0</span> matches found
+            <div style="margin-top: 5px;">
+                <button id="prev-result" class="secondary-btn">← Previous</button>
+                <span id="result-info">0 of 0</span>
+                <button id="next-result" class="secondary-btn">Next →</button>
+            </div>
+        </div>
+
+        <div class="viewer-container">
+            <div id="pdf-viewer" class="loading">
+                <p>📄 Select a PDF file to get started</p>
+                <p style="margin-top: 10px; font-size: 14px; color: #888;">
+                    You can upload your own PDF or click "Load Sample PDF" to try the demo
+                </p>
+            </div>
+        </div>
+
+        <div class="demo-features">
+            <div class="feature-card">
+                <h3>🚀 Performance Features</h3>
+                <ul>
+                    <li>Viewport-based rendering</li>
+                    <li>Chunked processing</li>
+                    <li>Memory optimization</li>
+                    <li>Smart caching</li>
+                    <li>Virtual scrolling ready</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <h3>🎯 Core Features</h3>
+                <ul>
+                    <li>Text highlighting</li>
+                    <li>Full-text search</li>
+                    <li>Zoom controls</li>
+                    <li>Page navigation</li>
+                    <li>Export/Import highlights</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <h3>⚡ Optimizations</h3>
+                <ul>
+                    <li>37KB core bundle</li>
+                    <li>70% compression ratio</li>
+                    <li>Tree-shaking support</li>
+                    <li>Multiple build formats</li>
+                    <li>TypeScript support</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Salina PDF Viewer (PDF.js will be loaded automatically) -->
+    <script src="packages/core/dist/iife/index.global.js"></script>
+
+    <script>
+        // Initialize the PDF viewer
+        let viewer = null;
+        let currentSearchResults = [];
+        let currentSearchIndex = -1;
+
+        // DOM elements
+        const fileInput = document.getElementById('file-input');
+        const loadSampleBtn = document.getElementById('load-sample');
+        const searchInput = document.getElementById('search-input');
+        const searchBtn = document.getElementById('search-btn');
+        const clearSearchBtn = document.getElementById('clear-search');
+        const prevPageBtn = document.getElementById('prev-page');
+        const nextPageBtn = document.getElementById('next-page');
+        const pageInfo = document.getElementById('page-info');
+        const zoomInBtn = document.getElementById('zoom-in');
+        const zoomOutBtn = document.getElementById('zoom-out');
+        const fitWidthBtn = document.getElementById('fit-width');
+        const zoomInfo = document.getElementById('zoom-info');
+        const highlightColor = document.getElementById('highlight-color');
+        const clearHighlightsBtn = document.getElementById('clear-highlights');
+        const exportBtn = document.getElementById('export-highlights');
+        const importBtn = document.getElementById('import-btn');
+        const importInput = document.getElementById('import-highlights');
+        const performanceBtn = document.getElementById('performance-test');
+        const statusEl = document.getElementById('status');
+        const errorEl = document.getElementById('error-message');
+        const searchResultsEl = document.getElementById('search-results');
+        const searchCount = document.getElementById('search-count');
+        const prevResultBtn = document.getElementById('prev-result');
+        const nextResultBtn = document.getElementById('next-result');
+        const resultInfo = document.getElementById('result-info');
+        const performanceInfo = document.getElementById('performance-info');
+        const statsEl = document.getElementById('stats');
+
+        // Initialize viewer
+        function initializeViewer() {
+            const container = document.getElementById('pdf-viewer');
+            
+            viewer = new SalinaPDFViewer.SalinaPDFViewer({
+                container: container,
+                theme: 'light',
+                width: '100%',
+                height: '100%',
+                features: {
+                    highlighting: true,
+                    search: true,
+                    zoom: true,
+                    export: true
+                },
+                highlighting: {
+                    defaultColor: highlightColor.value + '80', // Add transparency
+                    allowMultipleColors: true,
+                    persistHighlights: true
+                },
+                search: {
+                    highlightColor: 'rgba(255, 165, 0, 0.6)',
+                    caseSensitive: false,
+                    wholeWords: false
+                },
+                zoom: {
+                    min: 0.5,
+                    max: 3.0,
+                    step: 0.2
+                },
+                callbacks: {
+                    onLoad: (totalPages) => {
+                        updateStatus(`PDF loaded successfully (${totalPages} pages)`);
+                        updatePageInfo();
+                        updateStats();
+                    },
+                    onError: (error) => {
+                        showError(`Error loading PDF: ${error.message}`);
+                    },
+                    onPageChange: (page, totalPages) => {
+                        updatePageInfo();
+                    },
+                    onZoom: (scale) => {
+                        updateZoomInfo(scale);
+                    },
+                    onSearch: (results) => {
+                        handleSearchResults(results);
+                    },
+                    onHighlight: (highlight) => {
+                        updateStats();
+                        updateStatus('Highlight added');
+                    },
+                    onHighlightRemove: () => {
+                        updateStats();
+                        updateStatus('Highlight removed');
+                    }
+                }
+            });
+
+            // Setup event listeners
+            setupEventListeners();
+        }
+
+        function setupEventListeners() {
+            // File input
+            fileInput.addEventListener('change', handleFileSelect);
+            
+            // Sample PDF
+            loadSampleBtn.addEventListener('click', loadSamplePDF);
+            
+            // Search
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleSearch();
+            });
+            searchBtn.addEventListener('click', handleSearch);
+            clearSearchBtn.addEventListener('click', clearSearch);
+            
+            // Navigation
+            prevPageBtn.addEventListener('click', () => viewer?.prevPage());
+            nextPageBtn.addEventListener('click', () => viewer?.nextPage());
+            
+            // Zoom
+            zoomInBtn.addEventListener('click', () => viewer?.zoomIn());
+            zoomOutBtn.addEventListener('click', () => viewer?.zoomOut());
+            fitWidthBtn.addEventListener('click', () => viewer?.fitToWidth());
+            
+            // Highlights
+            highlightColor.addEventListener('change', updateHighlightColor);
+            clearHighlightsBtn.addEventListener('click', () => viewer?.clearHighlights());
+            
+            // Export/Import
+            exportBtn.addEventListener('click', exportHighlights);
+            importBtn.addEventListener('click', () => importInput.click());
+            importInput.addEventListener('change', importHighlights);
+            
+            // Search results navigation
+            prevResultBtn.addEventListener('click', () => {
+                if (currentSearchIndex > 0) {
+                    currentSearchIndex--;
+                    viewer?.prevSearchResult();
+                    updateSearchResultInfo();
+                }
+            });
+            
+            nextResultBtn.addEventListener('click', () => {
+                if (currentSearchIndex < currentSearchResults.length - 1) {
+                    currentSearchIndex++;
+                    viewer?.nextSearchResult();
+                    updateSearchResultInfo();
+                }
+            });
+            
+            // Performance test
+            performanceBtn.addEventListener('click', runPerformanceTest);
+        }
+
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file && file.type === 'application/pdf') {
+                updateStatus('Loading PDF...');
+                try {
+                    await viewer.loadDocument(file);
+                } catch (error) {
+                    showError(`Failed to load PDF: ${error.message}`);
+                }
+            }
+        }
+
+        async function loadSamplePDF() {
+            updateStatus('Loading sample PDF...');
+            try {
+                // Load the existing sample PDF
+                const sampleUrl = './public/sample.pdf';
+                await viewer.loadDocument(sampleUrl);
+            } catch (error) {
+                // If sample not found, create a simple test message
+                showError('Sample PDF not found. Please upload your own PDF file to test the viewer.');
+                console.log('To test the viewer, either:');
+                console.log('1. Upload a PDF file using the file input');
+                console.log('2. Serve this directory with a local server');
+            }
+        }
+
+        function handleSearch() {
+            const query = searchInput.value.trim();
+            if (query) {
+                updateStatus('Searching...');
+                const results = viewer.search(query);
+                currentSearchResults = results;
+                currentSearchIndex = results.length > 0 ? 0 : -1;
+            }
+        }
+
+        function clearSearch() {
+            searchInput.value = '';
+            viewer.clearSearch();
+            searchResultsEl.style.display = 'none';
+            currentSearchResults = [];
+            currentSearchIndex = -1;
+        }
+
+        function handleSearchResults(results) {
+            if (results.length > 0) {
+                searchResultsEl.style.display = 'block';
+                searchCount.textContent = results.length;
+                updateSearchResultInfo();
+                updateStatus(`Found ${results.length} search results`);
+            } else {
+                searchResultsEl.style.display = 'none';
+                updateStatus('No search results found');
+            }
+        }
+
+        function updateSearchResultInfo() {
+            if (currentSearchResults.length > 0) {
+                resultInfo.textContent = `${currentSearchIndex + 1} of ${currentSearchResults.length}`;
+                prevResultBtn.disabled = currentSearchIndex <= 0;
+                nextResultBtn.disabled = currentSearchIndex >= currentSearchResults.length - 1;
+            } else {
+                resultInfo.textContent = '0 of 0';
+                prevResultBtn.disabled = true;
+                nextResultBtn.disabled = true;
+            }
+        }
+
+        function updatePageInfo() {
+            if (viewer) {
+                const current = viewer.getCurrentPage();
+                const total = viewer.getTotalPages();
+                pageInfo.textContent = `Page ${current} of ${total}`;
+                prevPageBtn.disabled = current <= 1;
+                nextPageBtn.disabled = current >= total;
+            }
+        }
+
+        function updateZoomInfo(scale) {
+            zoomInfo.textContent = `${Math.round(scale * 100)}%`;
+        }
+
+        function updateHighlightColor() {
+            // This would update the default highlight color for new highlights
+            updateStatus(`Highlight color changed to ${highlightColor.value}`);
+        }
+
+        function exportHighlights() {
+            const highlights = viewer.exportHighlights('json');
+            const blob = new Blob([highlights], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'pdf-highlights.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            updateStatus('Highlights exported successfully');
+        }
+
+        function importHighlights(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const format = file.name.endsWith('.csv') ? 'csv' : 'json';
+                        viewer.importHighlights(e.target.result, format);
+                        updateStatus('Highlights imported successfully');
+                        updateStats();
+                    } catch (error) {
+                        showError(`Failed to import highlights: ${error.message}`);
+                    }
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        function runPerformanceTest() {
+            updateStatus('Running performance test...');
+            const startTime = performance.now();
+            
+            // Simulate some operations
+            const testOperations = [
+                () => viewer?.setZoom(1.5),
+                () => viewer?.setZoom(1.0),
+                () => viewer?.search('test'),
+                () => viewer?.clearSearch()
+            ];
+            
+            testOperations.forEach(op => op());
+            
+            const endTime = performance.now();
+            const duration = endTime - startTime;
+            
+            performanceInfo.textContent = `Test completed in ${duration.toFixed(2)}ms`;
+            updateStatus('Performance test completed');
+            
+            // Test memory usage if available
+            if (performance.memory) {
+                const memory = performance.memory;
+                console.log('Memory usage:', {
+                    used: Math.round(memory.usedJSHeapSize / 1048576) + 'MB',
+                    total: Math.round(memory.totalJSHeapSize / 1048576) + 'MB',
+                    limit: Math.round(memory.jsHeapSizeLimit / 1048576) + 'MB'
+                });
+            }
+        }
+
+        function updateStats() {
+            if (viewer) {
+                const highlights = viewer.getHighlights();
+                const searchResults = viewer.getSearchResults();
+                statsEl.textContent = `${highlights.length} highlights | ${searchResults.length} search results`;
+            }
+        }
+
+        function updateStatus(message) {
+            statusEl.querySelector('span').textContent = message;
+            errorEl.style.display = 'none';
+        }
+
+        function showError(message) {
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+            updateStatus('Error occurred');
+        }
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', initializeViewer);
+
+        // Global error handling
+        window.addEventListener('error', (event) => {
+            showError(`Unexpected error: ${event.message}`);
+        });
+    </script>
+</body>
+</html>

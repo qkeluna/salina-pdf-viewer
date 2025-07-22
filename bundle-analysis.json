@@ -1,0 +1,35 @@
+{
+  "timestamp": "2025-07-22T02:37:26.795Z",
+  "totalSizeKB": "568.75",
+  "totalSizeMB": "0.56",
+  "fileAnalysis": [
+    {
+      "name": "index-B9nhnOmo.js",
+      "sizeInBytes": 568143,
+      "sizeInKB": 554.83,
+      "type": "js"
+    },
+    {
+      "name": "index-LKBjVjIA.css",
+      "sizeInBytes": 14256,
+      "sizeInKB": 13.92,
+      "type": "css"
+    },
+    {
+      "name": "pdfjs-dist-l0sNRNKZ.js",
+      "sizeInBytes": 1,
+      "sizeInKB": 0,
+      "type": "js"
+    }
+  ],
+  "typeBreakdown": {
+    "js": {
+      "count": 2,
+      "size": 568144
+    },
+    "css": {
+      "count": 1,
+      "size": 14256
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "name": "@salina-app/pdf-viewer-react",
+  "version": "2.0.0",
+  "description": "React wrapper for Salina PDF Viewer",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.mjs",
+  "types": "dist/types/index.d.mts",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.mts",
+      "import": "./dist/esm/index.mjs",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "build:types": "tsc --emitDeclarationOnly",
+    "dev": "tsup --watch",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "pdf",
+    "viewer",
+    "react",
+    "highlighting",
+    "search",
+    "typescript"
+  ],
+  "author": "Salina Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/salina-team/pdf-viewer.git",
+    "directory": "packages/react"
+  },
+  "peerDependencies": {
+    "@salina-app/pdf-viewer-core": "^2.0.0",
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "rimraf": "^5.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

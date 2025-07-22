@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salina PDF Viewer - Vanilla JS Example</title>
+    <link rel="stylesheet" href="https://unpkg.com/@salina/pdf-viewer-core@latest/dist/styles/index.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        .header {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.5rem 1rem;
+            background: #ffffff;
+            border-bottom: 1px solid #e9ecef;
+            flex-wrap: wrap;
+        }
+        
+        .toolbar button {
+            padding: 0.25rem 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .toolbar button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .viewer-container {
+            height: calc(100vh - 120px);
+            overflow: hidden;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            font-size: 0.9rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Salina PDF Viewer - Vanilla JS Example</h1>
+        <input type="file" id="fileInput" accept=".pdf" />
+    </div>
+    
+    <div class="toolbar" id="toolbar" style="display: none;">
+        <div>
+            <button id="prevPage">← Prev</button>
+            <span id="pageInfo">1 / 1</span>
+            <button id="nextPage">Next →</button>
+        </div>
+        
+        <div>
+            <button id="zoomOut">-</button>
+            <span id="zoomInfo">100%</span>
+            <button id="zoomIn">+</button>
+            <button id="fitWidth">Fit Width</button>
+        </div>
+        
+        <div>
+            <input type="text" id="searchInput" placeholder="Search..." />
+            <button id="searchBtn">Search</button>
+            <button id="prevSearch" style="display: none;">↑</button>
+            <span id="searchInfo" style="display: none;"></span>
+            <button id="nextSearch" style="display: none;">↓</button>
+        </div>
+        
+        <div class="stats">
+            <button id="exportHighlights">Export</button>
+            <input type="file" id="importHighlights" accept=".json" style="display: none;" />
+            <button id="importBtn">Import</button>
+            <button id="clearHighlights">Clear</button>
+            <span id="highlightCount">0 highlights</span>
+        </div>
+    </div>
+    
+    <div class="viewer-container">
+        <div id="pdfViewer" style="width: 100%; height: 100%;"></div>
+    </div>
+
+    <script type="module">
+        import { SalinaPDFViewer } from 'https://unpkg.com/@salina/pdf-viewer-core@latest/dist/esm/index.js'
+
+        let viewer = null
+        let currentPage = 1
+        let totalPages = 0
+        let scale = 1.0
+        let searchResults = []
+        let currentSearchIndex = -1
+        let highlights = []
+
+        // Initialize viewer
+        function initViewer() {
+            const container = document.getElementById('pdfViewer')
+            
+            viewer = new SalinaPDFViewer({
+                container,
+                features: {
+                    highlighting: true,
+                    search: true,
+                    zoom: true,
+                    export: true
+                },
+                callbacks: {
+                    onLoad: (total) => {
+                        totalPages = total
+                        updateUI()
+                        document.getElementById('toolbar').style.display = 'flex'
+                    },
+                    onPageChange: (page, total) => {
+                        currentPage = page
+                        totalPages = total
+                        updateUI()
+                    },
+                    onZoom: (newScale) => {
+                        scale = newScale
+                        updateUI()
+                    },
+                    onSearch: (results) => {
+                        searchResults = results
+                        currentSearchIndex = results.length > 0 ? 0 : -1
+                        updateSearchUI()
+                    },
+                    onHighlight: (highlight) => {
+                        highlights.push(highlight)
+                        updateHighlightUI()
+                    },
+                    onHighlightRemove: (id) => {
+                        highlights = highlights.filter(h => h.id !== id)
+                        updateHighlightUI()
+                    },
+                    onError: (error) => {
+                        alert('Error: ' + error.message)
+                    }
+                }
+            })
+        }
+
+        // Update UI elements
+        function updateUI() {
+            document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages}`
+            document.getElementById('zoomInfo').textContent = `${Math.round(scale * 100)}%`
+            
+            document.getElementById('prevPage').disabled = currentPage <= 1
+            document.getElementById('nextPage').disabled = currentPage >= totalPages
+        }
+
+        function updateSearchUI() {
+            const hasResults = searchResults.length > 0
+            document.getElementById('prevSearch').style.display = hasResults ? 'inline' : 'none'
+            document.getElementById('nextSearch').style.display = hasResults ? 'inline' : 'none'
+            document.getElementById('searchInfo').style.display = hasResults ? 'inline' : 'none'
+            
+            if (hasResults) {
+                document.getElementById('searchInfo').textContent = 
+                    `${currentSearchIndex + 1} / ${searchResults.length}`
+            }
+        }
+
+        function updateHighlightUI() {
+            document.getElementById('highlightCount').textContent = `${highlights.length} highlights`
+            document.getElementById('exportHighlights').disabled = highlights.length === 0
+            document.getElementById('clearHighlights').disabled = highlights.length === 0
+        }
+
+        // Event listeners
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0]
+            if (file && viewer) {
+                viewer.loadDocument(file)
+            }
+        })
+
+        document.getElementById('prevPage').addEventListener('click', () => {
+            viewer?.prevPage()
+        })
+
+        document.getElementById('nextPage').addEventListener('click', () => {
+            viewer?.nextPage()
+        })
+
+        document.getElementById('zoomOut').addEventListener('click', () => {
+            viewer?.zoomOut()
+        })
+
+        document.getElementById('zoomIn').addEventListener('click', () => {
+            viewer?.zoomIn()
+        })
+
+        document.getElementById('fitWidth').addEventListener('click', () => {
+            viewer?.fitToWidth()
+        })
+
+        document.getElementById('searchBtn').addEventListener('click', () => {
+            const query = document.getElementById('searchInput').value.trim()
+            if (query) {
+                viewer?.search(query)
+            } else {
+                viewer?.clearSearch()
+                searchResults = []
+                currentSearchIndex = -1
+                updateSearchUI()
+            }
+        })
+
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('searchBtn').click()
+            }
+        })
+
+        document.getElementById('prevSearch').addEventListener('click', () => {
+            viewer?.prevSearchResult()
+            currentSearchIndex = currentSearchIndex === 0 
+                ? searchResults.length - 1 
+                : currentSearchIndex - 1
+            updateSearchUI()
+        })
+
+        document.getElementById('nextSearch').addEventListener('click', () => {
+            viewer?.nextSearchResult()
+            currentSearchIndex = (currentSearchIndex + 1) % searchResults.length
+            updateSearchUI()
+        })
+
+        document.getElementById('exportHighlights').addEventListener('click', () => {
+            const data = viewer?.exportHighlights('json')
+            if (data) {
+                const blob = new Blob([data], { type: 'application/json' })
+                const url = URL.createObjectURL(blob)
+                const link = document.createElement('a')
+                link.href = url
+                link.download = 'highlights.json'
+                link.click()
+                URL.revokeObjectURL(url)
+            }
+        })
+
+        document.getElementById('importBtn').addEventListener('click', () => {
+            document.getElementById('importHighlights').click()
+        })
+
+        document.getElementById('importHighlights').addEventListener('change', (e) => {
+            const file = e.target.files[0]
+            if (file) {
+                const reader = new FileReader()
+                reader.onload = (event) => {
+                    try {
+                        viewer?.importHighlights(event.target.result, 'json')
+                        highlights = viewer?.getHighlights() || []
+                        updateHighlightUI()
+                    } catch (error) {
+                        alert('Failed to import highlights: ' + error.message)
+                    }
+                }
+                reader.readAsText(file)
+            }
+        })
+
+        document.getElementById('clearHighlights').addEventListener('click', () => {
+            if (confirm('Clear all highlights?')) {
+                viewer?.clearHighlights()
+                highlights = []
+                updateHighlightUI()
+            }
+        })
+
+        // Initialize
+        initViewer()
+        updateUI()
+        updateSearchUI()
+        updateHighlightUI()
+    </script>
+</body>
+</html>

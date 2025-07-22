@@ -1,0 +1,179 @@
+/* src/styles/index.css */
+.salina-pdf-viewer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: #f5f5f5;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+.salina-pdf-viewer[data-theme=dark] {
+  background-color: #1a1a1a;
+  color: #ffffff;
+}
+.salina-pdf-page {
+  position: relative;
+  display: inline-block;
+  margin: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  background: white;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.salina-pdf-viewer[data-theme=dark] .salina-pdf-page {
+  background: #2d2d2d;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+.salina-pdf-page canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.salina-pdf-text-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+.salina-pdf-text-layer span {
+  position: absolute;
+  color: transparent;
+  cursor: text;
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+.salina-highlight {
+  position: absolute;
+  pointer-events: auto;
+  border-radius: 2px;
+  z-index: 10;
+  transition: opacity 0.2s ease;
+  cursor: pointer;
+}
+.salina-highlight:hover {
+  opacity: 0.8;
+}
+.salina-search-highlight {
+  position: absolute;
+  background-color: rgba(255, 165, 0, 0.6);
+  pointer-events: none;
+  border-radius: 2px;
+  z-index: 15;
+  transition: all 0.2s ease;
+}
+.salina-search-highlight.current {
+  background-color: rgba(255, 0, 0, 0.6);
+  box-shadow: 0 0 4px rgba(255, 0, 0, 0.8);
+  animation: pulse 1s infinite;
+}
+@keyframes pulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}
+.salina-pdf-viewer.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+.salina-pdf-viewer.loading::before {
+  content: "Loading PDF...";
+  font-size: 1.1rem;
+  color: #666;
+}
+.salina-pdf-viewer[data-theme=dark].loading::before {
+  color: #ccc;
+}
+.salina-pdf-viewer.error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: #dc3545;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+  margin: 1rem;
+  padding: 1rem;
+}
+.salina-pdf-viewer[data-theme=dark].error {
+  color: #ff6b6b;
+  background-color: #2d1b1b;
+  border-color: #5a2d2d;
+}
+@media (max-width: 768px) {
+  .salina-pdf-page {
+    margin: 5px;
+    max-width: calc(100vw - 20px);
+  }
+  .salina-pdf-viewer {
+    padding: 5px;
+  }
+}
+.salina-pdf-viewer:focus {
+  outline: 2px solid #4a90e2;
+  outline-offset: 2px;
+}
+.salina-highlight:focus {
+  outline: 2px solid #4a90e2;
+  outline-offset: 1px;
+}
+.salina-pdf-text-layer ::selection {
+  background-color: rgba(0, 123, 255, 0.3);
+}
+.salina-pdf-text-layer ::-moz-selection {
+  background-color: rgba(0, 123, 255, 0.3);
+}
+@media print {
+  .salina-pdf-viewer {
+    background: white;
+    overflow: visible;
+  }
+  .salina-pdf-page {
+    box-shadow: none;
+    margin: 0;
+    page-break-inside: avoid;
+  }
+  .salina-highlight,
+  .salina-search-highlight {
+    opacity: 0.3;
+  }
+}
+@media (prefers-contrast: high) {
+  .salina-highlight {
+    border: 2px solid #000;
+  }
+  .salina-search-highlight {
+    border: 2px solid #ff0000;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .salina-highlight,
+  .salina-search-highlight {
+    transition: none;
+  }
+  .salina-search-highlight.current {
+    animation: none;
+  }
+}
