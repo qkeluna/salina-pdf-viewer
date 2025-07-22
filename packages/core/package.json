@@ -1,6 +1,6 @@
 {
   "name": "@salina-app/pdf-viewer-core",
-  "version": "2.0.0",
+  "version": "3.0.2",
   "description": "Framework-agnostic PDF viewer core library",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.mjs",
@@ -37,7 +37,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/salina-team/pdf-viewer.git",
+    "url": "git+https://github.com/qkeluna/salina-pdf-viewer.git",
     "directory": "packages/core"
   },
   "peerDependencies": {
@@ -56,7 +56,7 @@
     "access": "public"
   },
   "bugs": {
-    "url": "https://github.com/salina-team/pdf-viewer/issues"
+    "url": "https://github.com/qkeluna/salina-pdf-viewer/issues"
   },
-  "homepage": "https://github.com/salina-team/pdf-viewer#readme"
+  "homepage": "https://github.com/qkeluna/salina-pdf-viewer#readme"
 }

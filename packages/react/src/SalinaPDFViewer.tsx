@@ -10,6 +10,7 @@ import {
   type Highlight,
   type SearchResult,
 } from "@salina-app/pdf-viewer-core";
+import type { ActiveHighlight } from "@salina-app/pdf-viewer-core";
 
 export interface SalinaPDFViewerProps
   extends Omit<SalinaPDFViewerOptions, "container"> {
@@ -43,13 +44,13 @@ export interface SalinaPDFViewerRef {
   nextSearchResult: () => void;
   prevSearchResult: () => void;
 
-  // Highlighting
-  addHighlight: (highlight: Omit<Highlight, "id" | "timestamp">) => Highlight;
-  removeHighlight: (id: string) => boolean;
+  // Highlighting (simplified API)
+  addHighlight: () => void;
+  removeHighlight: () => boolean;
   clearHighlights: () => void;
-  getHighlights: () => Highlight[];
-  exportHighlights: (format?: "json" | "csv") => string;
-  importHighlights: (data: string, format?: "json" | "csv") => void;
+  getHighlights: () => ActiveHighlight[];
+  exportHighlights: () => string;
+  importHighlights: () => void;
 
   // Document
   loadDocument: (file: File | string | ArrayBuffer) => Promise<void>;
@@ -168,16 +169,21 @@ export const SalinaPDFViewer = forwardRef<
       nextSearchResult: () => viewerRef.current?.nextSearchResult(),
       prevSearchResult: () => viewerRef.current?.prevSearchResult(),
 
-      // Highlighting
-      addHighlight: (highlight) => viewerRef.current?.addHighlight(highlight)!,
-      removeHighlight: (id: string) =>
-        viewerRef.current?.removeHighlight(id) || false,
+      // Highlighting (simplified API)
+      addHighlight: () => {
+        viewerRef.current?.addHighlight();
+        return undefined; // Simple highlighter doesn't return highlight objects
+      },
+      removeHighlight: () => {
+        viewerRef.current?.removeHighlight();
+        return true; // Always returns true for compatibility
+      },
       clearHighlights: () => viewerRef.current?.clearHighlights(),
       getHighlights: () => viewerRef.current?.getHighlights() || [],
-      exportHighlights: (format) =>
-        viewerRef.current?.exportHighlights(format) || "",
-      importHighlights: (data, format) =>
-        viewerRef.current?.importHighlights(data, format),
+      exportHighlights: () => viewerRef.current?.exportHighlights() || "",
+      importHighlights: () => {
+        viewerRef.current?.importHighlights();
+      },
 
       // Document
       loadDocument: (file) =>

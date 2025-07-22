@@ -15,7 +15,7 @@ interface Highlight {
     metadata?: {
         userAgent?: string;
         zoomLevel?: number;
-        selectionMethod?: 'mouse' | 'keyboard' | 'programmatic';
+        selectionMethod?: "mouse" | "keyboard" | "programmatic";
         [key: string]: any;
     };
 }
@@ -34,13 +34,17 @@ interface SearchResult {
 interface SalinaPDFViewerOptions {
     container: HTMLElement;
     file?: File | string | ArrayBuffer;
-    theme?: 'light' | 'dark' | 'auto';
+    theme?: "light" | "dark" | "auto";
     width?: number | string;
     height?: number | string;
     features?: {
         highlighting?: boolean;
         search?: boolean;
+        navigation?: boolean;
         zoom?: boolean;
+        fullscreen?: boolean;
+        print?: boolean;
+        download?: boolean;
         export?: boolean;
         annotations?: boolean;
     };
@@ -58,6 +62,7 @@ interface SalinaPDFViewerOptions {
         min?: number;
         max?: number;
         step?: number;
+        default?: number;
         fitToWidth?: boolean;
         fitToHeight?: boolean;
     };
@@ -96,15 +101,55 @@ interface SalinaPDFPlugin {
     uninstall(viewer: any): void;
 }
 interface EventMap {
-    'document:loaded': [totalPages: number];
-    'document:error': [error: Error];
-    'page:changed': [page: number, totalPages: number];
-    'zoom:changed': [scale: number];
-    'search:results': [results: SearchResult[]];
-    'search:cleared': [];
-    'highlight:added': [highlight: Highlight];
-    'highlight:removed': [highlightId: string];
-    'highlight:cleared': [];
+    "document:loaded": [totalPages: number];
+    "document:error": [error: Error];
+    "page:changed": [page: number, totalPages: number];
+    "zoom:changed": [scale: number];
+    "search:results": [results: SearchResult[]];
+    "search:cleared": [];
+    "highlight:added": [highlight: Highlight];
+    "highlight:removed": [highlightId: string];
+    "highlight:cleared": [];
+}
+
+interface SimpleHighlighterOptions {
+    highlightColor: string;
+    copyHintEnabled: boolean;
+}
+interface HighlightRectangle {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+interface ActiveHighlight {
+    pageNumber: number;
+    text: string;
+    rectangles: HighlightRectangle[];
+    timestamp: number;
+}
+declare class SimpleHighlighter {
+    private options;
+    private activeHighlight;
+    private highlightElements;
+    private copyHintElement;
+    private scale;
+    constructor(options: SimpleHighlighterOptions);
+    updateScale(scale: number): void;
+    private setupEventListeners;
+    private handleMouseUp;
+    private handleDocumentClick;
+    private handleKeyDown;
+    private findPageNumber;
+    private createHighlightRectangles;
+    private setActiveHighlight;
+    private renderHighlights;
+    private renderCopyHint;
+    private copyToClipboard;
+    private rerenderHighlights;
+    clearHighlights(): void;
+    getActiveHighlight(): ActiveHighlight | null;
+    destroy(): void;
 }
 
 declare class SalinaPDFViewer extends EventEmitter {
@@ -112,7 +157,7 @@ declare class SalinaPDFViewer extends EventEmitter {
     private options;
     private state;
     private pdfRenderer;
-    private highlightEngine;
+    private simpleHighlighter;
     private searchEngine;
     private plugins;
     private resizeObserver?;
@@ -131,13 +176,13 @@ declare class SalinaPDFViewer extends EventEmitter {
     clearSearch(): void;
     nextSearchResult(): void;
     prevSearchResult(): void;
-    addHighlight(highlight: Omit<Highlight, 'id' | 'timestamp'>): Highlight;
-    removeHighlight(id: string): boolean;
+    getActiveHighlight(): ActiveHighlight | null;
     clearHighlights(): void;
-    getHighlights(): Highlight[];
-    exportHighlights(format?: 'json' | 'csv'): string;
-    importHighlights(data: string, format?: 'json' | 'csv'): void;
-    private parseCSVLine;
+    addHighlight(): void;
+    removeHighlight(): boolean;
+    getHighlights(): ActiveHighlight[];
+    exportHighlights(): string;
+    importHighlights(): void;
     use(plugin: SalinaPDFPlugin): void;
     unuse(pluginName: string): void;
     getCurrentPage(): number;
@@ -153,49 +198,6 @@ declare class SalinaPDFViewer extends EventEmitter {
     private setupContainer;
     private setupEventListeners;
     private setupResizeObserver;
-    private handleTextSelection;
-}
-
-interface HighlightOptions {
-    defaultColor: string;
-    allowMultipleColors: boolean;
-    persistHighlights: boolean;
-}
-declare class HighlightEngine {
-    private highlights;
-    private highlightElements;
-    private scale;
-    private options;
-    constructor(options: HighlightOptions);
-    addHighlight(highlight: Highlight): void;
-    removeHighlight(id: string): void;
-    clearHighlights(): void;
-    updateScale(scale: number): void;
-    getHighlights(): Highlight[];
-    getHighlightById(id: string): Highlight | undefined;
-    destroy(): void;
-    /**
-     * Handle viewport changes (scroll, resize) to maintain highlight accuracy
-     */
-    handleViewportChange(): void;
-    /**
-     * Optimize highlight rendering by only updating visible highlights
-     */
-    updateVisibleHighlights(): void;
-    /**
-     * Get comprehensive positioning information for a page
-     */
-    private getPositionInfo;
-    /**
-     * Calculate accurate highlight position with proper coordinate transformation
-     */
-    private renderHighlight;
-    /**
-     * Create highlight from text selection with accurate coordinate calculation
-     */
-    createHighlightFromSelection(selection: Selection, pageNumber: number, color?: string): Highlight[] | null;
-    private generateHighlightId;
-    private handleHighlightClick;
 }
 
 interface SearchOptions {
@@ -413,6 +415,6 @@ declare class VirtualScrolling {
     getTotalHeight(): number;
 }
 
-declare const VERSION = "1.0.0";
+declare const VERSION = "3.0.2";
 
-export { type EventMap, type Highlight, HighlightEngine, MemoryManager, type PDFPage, PDFRenderer, PerformanceOptimizer, type SalinaPDFPlugin, SalinaPDFViewer, type SalinaPDFViewerOptions, SearchEngine, type SearchResult, VERSION, type ViewerState, VirtualScrolling, clamp, debounce, deepMerge, delay, downloadBlob, downloadData, formatFileSize, generateId, getRangeRect, isBrowser, isInViewport, isTouchDevice, loadFile, retry, throttle };
+export { type ActiveHighlight, type EventMap, type Highlight, MemoryManager, type PDFPage, PDFRenderer, PerformanceOptimizer, type SalinaPDFPlugin, SalinaPDFViewer, type SalinaPDFViewerOptions, SearchEngine, type SearchResult, SimpleHighlighter, VERSION, type ViewerState, VirtualScrolling, clamp, debounce, deepMerge, delay, downloadBlob, downloadData, formatFileSize, generateId, getRangeRect, isBrowser, isInViewport, isTouchDevice, loadFile, retry, throttle };

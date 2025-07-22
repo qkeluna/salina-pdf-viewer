@@ -1,5 +1,5 @@
 import React$1 from 'react';
-import { SalinaPDFViewerOptions, Highlight, SearchResult, SalinaPDFViewer as SalinaPDFViewer$1 } from '@salina-app/pdf-viewer-core';
+import { SalinaPDFViewerOptions, Highlight, SearchResult, ActiveHighlight, SalinaPDFViewer as SalinaPDFViewer$1 } from '@salina-app/pdf-viewer-core';
 export { EventMap, Highlight, PDFPage, SalinaPDFPlugin, SalinaPDFViewerOptions, SearchResult, ViewerState } from '@salina-app/pdf-viewer-core';
 
 interface SalinaPDFViewerProps extends Omit<SalinaPDFViewerOptions, "container"> {
@@ -26,12 +26,12 @@ interface SalinaPDFViewerRef {
     clearSearch: () => void;
     nextSearchResult: () => void;
     prevSearchResult: () => void;
-    addHighlight: (highlight: Omit<Highlight, "id" | "timestamp">) => Highlight;
-    removeHighlight: (id: string) => boolean;
+    addHighlight: () => void;
+    removeHighlight: () => boolean;
     clearHighlights: () => void;
-    getHighlights: () => Highlight[];
-    exportHighlights: (format?: "json" | "csv") => string;
-    importHighlights: (data: string, format?: "json" | "csv") => void;
+    getHighlights: () => ActiveHighlight[];
+    exportHighlights: () => string;
+    importHighlights: () => void;
     loadDocument: (file: File | string | ArrayBuffer) => Promise<void>;
     getCurrentPage: () => number;
     getTotalPages: () => number;
@@ -55,7 +55,6 @@ interface UsePDFViewerReturn {
     error: string | null;
     searchResults: SearchResult[];
     currentSearchIndex: number;
-    highlights: Highlight[];
     goToPage: (page: number) => void;
     nextPage: () => void;
     prevPage: () => void;
@@ -68,12 +67,8 @@ interface UsePDFViewerReturn {
     clearSearch: () => void;
     nextSearchResult: () => void;
     prevSearchResult: () => void;
-    addHighlight: (highlight: Omit<Highlight, "id" | "timestamp">) => Highlight | undefined;
-    removeHighlight: (id: string) => boolean;
-    clearHighlights: () => void;
-    exportHighlights: (format?: "json" | "csv") => string;
-    importHighlights: (data: string, format?: "json" | "csv") => void;
     loadDocument: (file: File | string | ArrayBuffer) => Promise<void>;
+    clearHighlights: () => void;
     viewerRef: React.RefObject<SalinaPDFViewerRef | null>;
     callbacks: {
         onPageChange: (page: number, totalPages: number) => void;
@@ -81,8 +76,6 @@ interface UsePDFViewerReturn {
         onError: (error: Error) => void;
         onZoom: (scale: number) => void;
         onSearch: (results: SearchResult[]) => void;
-        onHighlight: (highlight: Highlight) => void;
-        onHighlightRemove: (highlightId: string) => void;
     };
 }
 declare function usePDFViewer(options?: UsePDFViewerOptions): UsePDFViewerReturn;

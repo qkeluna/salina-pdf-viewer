@@ -346,20 +346,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           {showHighlightTools && (
             <div className="toolbar-section">
               <button
-                onClick={() => {
-                  // Test highlight creation
-                  const testHighlight = {
-                    text: "Test Highlight",
-                    color: "rgba(255, 0, 0, 0.4)",
-                    position: { x: 100, y: 100, width: 200, height: 20 },
-                    pageNumber: 1,
-                  };
-                  addHighlight(testHighlight);
-                }}
-              >
-                Add Test Highlight
-              </button>
-              <button
                 onClick={exportHighlights}
                 disabled={highlights.length === 0}
               >

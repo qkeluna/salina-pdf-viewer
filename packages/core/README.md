@@ -1,4 +1,4 @@
-# @salina/pdf-viewer-core
+# @salina-app/pdf-viewer-core
 
 A framework-agnostic PDF viewer library with highlighting and search capabilities.
 
@@ -14,7 +14,7 @@ A framework-agnostic PDF viewer library with highlighting and search capabilitie
 ## Installation
 
 ```bash
-npm install @salina/pdf-viewer-core
+npm install @salina-app/pdf-viewer-core
 ```
 
 ### Peer Dependencies
@@ -26,8 +26,8 @@ npm install pdfjs-dist@^5.3.0
 ## Quick Start
 
 ```javascript
-import { SalinaPDFViewer } from "@salina/pdf-viewer-core";
-import "@salina/pdf-viewer-core/styles";
+import { SalinaPDFViewer } from "@salina-app/pdf-viewer-core";
+import "@salina-app/pdf-viewer-core/styles";
 
 const viewer = new SalinaPDFViewer({
   container: document.getElementById("pdf-container"),
@@ -117,7 +117,7 @@ viewer.clearSearch();
 Import the default styles:
 
 ```css
-@import "@salina/pdf-viewer-core/styles";
+@import "@salina-app/pdf-viewer-core/styles";
 ```
 
 Or customize with CSS variables:
@@ -157,7 +157,7 @@ import {
   SalinaPDFViewer,
   HighlightAnnotation,
   SearchResult,
-} from "@salina/pdf-viewer-core";
+} from "@salina-app/pdf-viewer-core";
 ```
 
 ## License

@@ -90,13 +90,21 @@ var SalinaPDFViewer = forwardRef(({ className, style, ...props }, ref) => {
       clearSearch: () => viewerRef.current?.clearSearch(),
       nextSearchResult: () => viewerRef.current?.nextSearchResult(),
       prevSearchResult: () => viewerRef.current?.prevSearchResult(),
-      // Highlighting
-      addHighlight: (highlight) => viewerRef.current?.addHighlight(highlight),
-      removeHighlight: (id) => viewerRef.current?.removeHighlight(id) || false,
+      // Highlighting (simplified API)
+      addHighlight: () => {
+        viewerRef.current?.addHighlight();
+        return void 0;
+      },
+      removeHighlight: () => {
+        viewerRef.current?.removeHighlight();
+        return true;
+      },
       clearHighlights: () => viewerRef.current?.clearHighlights(),
       getHighlights: () => viewerRef.current?.getHighlights() || [],
-      exportHighlights: (format) => viewerRef.current?.exportHighlights(format) || "",
-      importHighlights: (data, format) => viewerRef.current?.importHighlights(data, format),
+      exportHighlights: () => viewerRef.current?.exportHighlights() || "",
+      importHighlights: () => {
+        viewerRef.current?.importHighlights();
+      },
       // Document
       loadDocument: (file) => viewerRef.current?.loadDocument(file) || Promise.resolve(),
       // Getters
@@ -127,7 +135,6 @@ function usePDFViewer(options = {}) {
   const [error, setError] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
   const [currentSearchIndex, setCurrentSearchIndex] = useState(-1);
-  const [highlights, setHighlights] = useState([]);
   const handlePageChange = useCallback((page, total) => {
     setCurrentPage(page);
     setTotalPages(total);
@@ -147,12 +154,6 @@ function usePDFViewer(options = {}) {
   const handleSearch = useCallback((results) => {
     setSearchResults(results);
     setCurrentSearchIndex(results.length > 0 ? 0 : -1);
-  }, []);
-  const handleHighlight = useCallback((highlight) => {
-    setHighlights((prev) => [...prev, highlight]);
-  }, []);
-  const handleHighlightRemove = useCallback((highlightId) => {
-    setHighlights((prev) => prev.filter((h) => h.id !== highlightId));
   }, []);
   const goToPage = useCallback((page) => {
     viewerRef.current?.goToPage(page);
@@ -198,29 +199,9 @@ function usePDFViewer(options = {}) {
       (prev) => searchResults.length > 0 ? prev === 0 ? searchResults.length - 1 : prev - 1 : -1
     );
   }, [searchResults.length]);
-  const addHighlight = useCallback(
-    (highlight) => {
-      return viewerRef.current?.addHighlight(highlight);
-    },
-    []
-  );
-  const removeHighlight = useCallback((id) => {
-    return viewerRef.current?.removeHighlight(id) || false;
-  }, []);
   const clearHighlights = useCallback(() => {
     viewerRef.current?.clearHighlights();
-    setHighlights([]);
   }, []);
-  const exportHighlights = useCallback((format = "json") => {
-    return viewerRef.current?.exportHighlights(format) || "";
-  }, []);
-  const importHighlights = useCallback(
-    (data, format = "json") => {
-      viewerRef.current?.importHighlights(data, format);
-      setHighlights(viewerRef.current?.getHighlights() || []);
-    },
-    []
-  );
   const loadDocument = useCallback(
     async (file) => {
       setIsLoading(true);
@@ -243,7 +224,6 @@ function usePDFViewer(options = {}) {
     error,
     searchResults,
     currentSearchIndex,
-    highlights,
     // Actions
     goToPage,
     nextPage,
@@ -257,11 +237,7 @@ function usePDFViewer(options = {}) {
     clearSearch,
     nextSearchResult,
     prevSearchResult,
-    addHighlight,
-    removeHighlight,
     clearHighlights,
-    exportHighlights,
-    importHighlights,
     loadDocument,
     // Ref and callbacks
     viewerRef,
@@ -270,9 +246,7 @@ function usePDFViewer(options = {}) {
       onLoad: handleLoad,
       onError: handleError,
       onZoom: handleZoom,
-      onSearch: handleSearch,
-      onHighlight: handleHighlight,
-      onHighlightRemove: handleHighlightRemove
+      onSearch: handleSearch
     }
   };
 }
@@ -303,7 +277,7 @@ var PDFViewerToolbar = ({
     }
   };
   const handleExportHighlights = () => {
-    const data = viewerRef.current?.exportHighlights("json");
+    const data = viewerRef.current?.exportHighlights();
     if (data) {
       const blob = new Blob([data], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -318,10 +292,12 @@ var PDFViewerToolbar = ({
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        const data = event.target?.result;
+      reader.onload = () => {
         try {
-          viewerRef.current?.importHighlights(data, "json");
+          viewerRef.current?.importHighlights();
+          console.warn(
+            "Import highlights not supported in simple highlighter mode"
+          );
         } catch (error) {
           alert("Failed to import highlights: " + error);
         }
@@ -361,11 +337,17 @@ var PDFViewerToolbar = ({
               children: "\u2190"
             }
           ),
-          /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.9rem", minWidth: "4rem", textAlign: "center" }, children: [
-            currentPage,
-            " / ",
-            totalPages
-          ] }),
+          /* @__PURE__ */ jsxs(
+            "span",
+            {
+              style: { fontSize: "0.9rem", minWidth: "4rem", textAlign: "center" },
+              children: [
+                currentPage,
+                " / ",
+                totalPages
+              ]
+            }
+          ),
           /* @__PURE__ */ jsx2(
             "button",
             {
@@ -398,10 +380,16 @@ var PDFViewerToolbar = ({
               children: "-"
             }
           ),
-          /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.9rem", minWidth: "4rem", textAlign: "center" }, children: [
-            Math.round(scale * 100),
-            "%"
-          ] }),
+          /* @__PURE__ */ jsxs(
+            "span",
+            {
+              style: { fontSize: "0.9rem", minWidth: "4rem", textAlign: "center" },
+              children: [
+                Math.round(scale * 100),
+                "%"
+              ]
+            }
+          ),
           /* @__PURE__ */ jsx2(
             "button",
             {
@@ -432,74 +420,81 @@ var PDFViewerToolbar = ({
             }
           )
         ] }),
-        /* @__PURE__ */ jsxs("form", { onSubmit: handleSearchSubmit, style: { display: "flex", alignItems: "center", gap: "0.5rem" }, children: [
-          /* @__PURE__ */ jsx2(
-            "input",
-            {
-              type: "text",
-              value: searchQuery,
-              onChange: (e) => setSearchQuery(e.target.value),
-              placeholder: "Search in PDF...",
-              style: {
-                padding: "0.25rem 0.5rem",
-                border: "1px solid #ccc",
-                borderRadius: "4px",
-                minWidth: "150px"
-              }
-            }
-          ),
-          /* @__PURE__ */ jsx2(
-            "button",
-            {
-              type: "submit",
-              style: {
-                padding: "0.25rem 0.5rem",
-                border: "1px solid #ccc",
-                borderRadius: "4px",
-                background: "white",
-                cursor: "pointer"
-              },
-              children: "Search"
-            }
-          ),
-          searchResults.length > 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
-            /* @__PURE__ */ jsx2(
-              "button",
-              {
-                type: "button",
-                onClick: () => viewerRef.current?.prevSearchResult(),
-                style: {
-                  padding: "0.25rem 0.5rem",
-                  border: "1px solid #ccc",
-                  borderRadius: "4px",
-                  background: "white",
-                  cursor: "pointer"
-                },
-                children: "\u2191"
-              }
-            ),
-            /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.8rem" }, children: [
-              currentSearchIndex + 1,
-              " / ",
-              searchResults.length
-            ] }),
-            /* @__PURE__ */ jsx2(
-              "button",
-              {
-                type: "button",
-                onClick: () => viewerRef.current?.nextSearchResult(),
-                style: {
-                  padding: "0.25rem 0.5rem",
-                  border: "1px solid #ccc",
-                  borderRadius: "4px",
-                  background: "white",
-                  cursor: "pointer"
-                },
-                children: "\u2193"
-              }
-            )
-          ] })
-        ] }),
+        /* @__PURE__ */ jsxs(
+          "form",
+          {
+            onSubmit: handleSearchSubmit,
+            style: { display: "flex", alignItems: "center", gap: "0.5rem" },
+            children: [
+              /* @__PURE__ */ jsx2(
+                "input",
+                {
+                  type: "text",
+                  value: searchQuery,
+                  onChange: (e) => setSearchQuery(e.target.value),
+                  placeholder: "Search in PDF...",
+                  style: {
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #ccc",
+                    borderRadius: "4px",
+                    minWidth: "150px"
+                  }
+                }
+              ),
+              /* @__PURE__ */ jsx2(
+                "button",
+                {
+                  type: "submit",
+                  style: {
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #ccc",
+                    borderRadius: "4px",
+                    background: "white",
+                    cursor: "pointer"
+                  },
+                  children: "Search"
+                }
+              ),
+              searchResults.length > 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
+                /* @__PURE__ */ jsx2(
+                  "button",
+                  {
+                    type: "button",
+                    onClick: () => viewerRef.current?.prevSearchResult(),
+                    style: {
+                      padding: "0.25rem 0.5rem",
+                      border: "1px solid #ccc",
+                      borderRadius: "4px",
+                      background: "white",
+                      cursor: "pointer"
+                    },
+                    children: "\u2191"
+                  }
+                ),
+                /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.8rem" }, children: [
+                  currentSearchIndex + 1,
+                  " / ",
+                  searchResults.length
+                ] }),
+                /* @__PURE__ */ jsx2(
+                  "button",
+                  {
+                    type: "button",
+                    onClick: () => viewerRef.current?.nextSearchResult(),
+                    style: {
+                      padding: "0.25rem 0.5rem",
+                      border: "1px solid #ccc",
+                      borderRadius: "4px",
+                      background: "white",
+                      cursor: "pointer"
+                    },
+                    children: "\u2193"
+                  }
+                )
+              ] })
+            ]
+          }
+        ),
         /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "0.5rem" }, children: [
           /* @__PURE__ */ jsx2(
             "button",
@@ -518,35 +513,45 @@ var PDFViewerToolbar = ({
               children: "Export"
             }
           ),
-          /* @__PURE__ */ jsxs("label", { style: { position: "relative", overflow: "hidden", display: "inline-block" }, children: [
-            /* @__PURE__ */ jsx2(
-              "input",
-              {
-                type: "file",
-                accept: ".json",
-                onChange: handleImportHighlights,
-                style: {
-                  position: "absolute",
-                  left: "-9999px"
-                }
-              }
-            ),
-            /* @__PURE__ */ jsx2(
-              "span",
-              {
-                style: {
-                  padding: "0.25rem 0.5rem",
-                  border: "1px solid #ccc",
-                  borderRadius: "4px",
-                  background: "white",
-                  cursor: "pointer",
-                  fontSize: "0.8rem",
-                  display: "inline-block"
-                },
-                children: "Import"
-              }
-            )
-          ] }),
+          /* @__PURE__ */ jsxs(
+            "label",
+            {
+              style: {
+                position: "relative",
+                overflow: "hidden",
+                display: "inline-block"
+              },
+              children: [
+                /* @__PURE__ */ jsx2(
+                  "input",
+                  {
+                    type: "file",
+                    accept: ".json",
+                    onChange: handleImportHighlights,
+                    style: {
+                      position: "absolute",
+                      left: "-9999px"
+                    }
+                  }
+                ),
+                /* @__PURE__ */ jsx2(
+                  "span",
+                  {
+                    style: {
+                      padding: "0.25rem 0.5rem",
+                      border: "1px solid #ccc",
+                      borderRadius: "4px",
+                      background: "white",
+                      cursor: "pointer",
+                      fontSize: "0.8rem",
+                      display: "inline-block"
+                    },
+                    children: "Import"
+                  }
+                )
+              ]
+            }
+          ),
           /* @__PURE__ */ jsx2(
             "button",
             {

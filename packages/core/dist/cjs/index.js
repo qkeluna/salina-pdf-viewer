@@ -19,12 +19,12 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/index.ts
 var index_exports = {};
 __export(index_exports, {
-  HighlightEngine: () => HighlightEngine,
   MemoryManager: () => MemoryManager,
   PDFRenderer: () => PDFRenderer,
   PerformanceOptimizer: () => PerformanceOptimizer,
   SalinaPDFViewer: () => SalinaPDFViewer,
   SearchEngine: () => SearchEngine,
+  SimpleHighlighter: () => SimpleHighlighter,
   VERSION: () => VERSION,
   VirtualScrolling: () => VirtualScrolling,
   clamp: () => clamp,
@@ -48,198 +48,269 @@ module.exports = __toCommonJS(index_exports);
 // src/SalinaPDFViewer.ts
 var import_eventemitter3 = require("eventemitter3");
 
-// src/highlighting/HighlightEngine.ts
-var HighlightEngine = class {
+// src/highlighting/SimpleHighlighter.ts
+var SimpleHighlighter = class {
   constructor(options) {
-    this.highlights = /* @__PURE__ */ new Map();
-    this.highlightElements = /* @__PURE__ */ new Map();
+    this.activeHighlight = null;
+    this.highlightElements = [];
+    this.copyHintElement = null;
     this.scale = 1;
     this.options = options;
-    console.log("HighlightEngine initialized with options:", options);
-  }
-  addHighlight(highlight) {
-    this.highlights.set(highlight.id, highlight);
-    this.renderHighlight(highlight);
-  }
-  removeHighlight(id) {
-    this.highlights.delete(id);
-    const element = this.highlightElements.get(id);
-    if (element) {
-      element.remove();
-      this.highlightElements.delete(id);
-    }
-  }
-  clearHighlights() {
-    this.highlights.clear();
-    this.highlightElements.forEach((element) => element.remove());
-    this.highlightElements.clear();
+    this.setupEventListeners();
   }
   updateScale(scale) {
     this.scale = scale;
-    this.highlights.forEach((highlight) => this.renderHighlight(highlight));
+    this.rerenderHighlights();
   }
-  getHighlights() {
-    return Array.from(this.highlights.values());
+  setupEventListeners() {
+    document.addEventListener("mouseup", this.handleMouseUp.bind(this));
+    document.addEventListener("click", this.handleDocumentClick.bind(this));
+    document.addEventListener("keydown", this.handleKeyDown.bind(this));
   }
-  getHighlightById(id) {
-    return this.highlights.get(id);
+  handleMouseUp() {
+    setTimeout(() => {
+      const selection = window.getSelection();
+      if (!selection || !selection.toString().trim() || selection.rangeCount === 0) {
+        return;
+      }
+      const selectedText = selection.toString().trim();
+      const range = selection.getRangeAt(0);
+      const pageNumber = this.findPageNumber(range);
+      if (!pageNumber) return;
+      const pageContainer = document.getElementById(`page-${pageNumber}`);
+      if (!pageContainer) return;
+      const textLayer = pageContainer.querySelector(".react-pdf__Page__textContent") || pageContainer.querySelector(".salina-pdf-text-layer");
+      if (!textLayer) return;
+      const startContainer = range.startContainer;
+      const endContainer = range.endContainer;
+      const commonAncestor = range.commonAncestorContainer;
+      const isWithinTextLayer = textLayer.contains(startContainer) || textLayer.contains(endContainer) || textLayer.contains(commonAncestor);
+      if (!isWithinTextLayer) return;
+      const rectangles = this.createHighlightRectangles(range, pageContainer);
+      if (rectangles.length > 0) {
+        this.setActiveHighlight({
+          pageNumber,
+          text: selectedText,
+          rectangles,
+          timestamp: Date.now()
+        });
+        setTimeout(() => {
+          selection.removeAllRanges();
+        }, 10);
+      }
+    }, 10);
   }
-  destroy() {
-    this.clearHighlights();
+  handleDocumentClick(e) {
+    const target = e.target;
+    if (target.closest(".salina-copy-hint")) {
+      return;
+    }
+    if (this.activeHighlight) {
+      const pageContainer = document.getElementById(
+        `page-${this.activeHighlight.pageNumber}`
+      );
+      if (!pageContainer?.contains(target)) {
+        this.clearHighlights();
+        return;
+      }
+      const textLayer = pageContainer.querySelector(".react-pdf__Page__textContent") || pageContainer.querySelector(".salina-pdf-text-layer");
+      if (textLayer && !textLayer.contains(target) && !target.closest(".salina-highlight")) {
+        this.clearHighlights();
+      }
+    }
   }
-  /**
-   * Handle viewport changes (scroll, resize) to maintain highlight accuracy
-   */
-  handleViewportChange() {
-    this.highlights.forEach((highlight) => this.renderHighlight(highlight));
+  handleKeyDown(e) {
+    if (e.key === "Escape") {
+      this.clearHighlights();
+    } else if ((e.ctrlKey || e.metaKey) && e.key === "c" && this.activeHighlight) {
+      e.preventDefault();
+      this.copyToClipboard();
+    }
   }
-  /**
-   * Optimize highlight rendering by only updating visible highlights
-   */
-  updateVisibleHighlights() {
-    const viewportRect = {
-      top: window.scrollY,
-      bottom: window.scrollY + window.innerHeight,
-      left: window.scrollX,
-      right: window.scrollX + window.innerWidth
-    };
-    this.highlights.forEach((highlight, id) => {
-      const element = this.highlightElements.get(id);
-      if (element) {
-        const elementRect = element.getBoundingClientRect();
-        const isVisible = !(elementRect.bottom < viewportRect.top || elementRect.top > viewportRect.bottom || elementRect.right < viewportRect.left || elementRect.left > viewportRect.right);
-        if (isVisible) {
-          this.renderHighlight(highlight);
+  findPageNumber(range) {
+    let element = range.commonAncestorContainer;
+    while (element && element !== document) {
+      if (element.nodeType === Node.ELEMENT_NODE) {
+        const el = element;
+        if (el.id && el.id.match(/^page-\d+$/)) {
+          return parseInt(el.id.replace("page-", ""));
+        }
+        const pageAttr = el.getAttribute("data-page-number");
+        if (pageAttr) {
+          return parseInt(pageAttr);
+        }
+        const pageContainer = el.closest('[id^="page-"]') || el.closest("[data-page-number]");
+        if (pageContainer) {
+          if (pageContainer.id && pageContainer.id.match(/^page-\d+$/)) {
+            return parseInt(pageContainer.id.replace("page-", ""));
+          }
+          const pageAttr2 = pageContainer.getAttribute("data-page-number");
+          if (pageAttr2) {
+            return parseInt(pageAttr2);
+          }
         }
       }
-    });
-  }
-  /**
-   * Get comprehensive positioning information for a page
-   */
-  getPositionInfo(pageNumber) {
-    const pageContainer = document.querySelector(
-      `[data-page-number="${pageNumber}"]`
-    );
-    if (!pageContainer) return null;
-    const textLayer = pageContainer.querySelector(".textLayer") || pageContainer.querySelector(".react-pdf__Page__textContent") || pageContainer.querySelector(".salina-pdf-text-layer");
-    const containerRect = pageContainer.getBoundingClientRect();
-    const textLayerRect = textLayer?.getBoundingClientRect() || null;
-    const viewerContainer = pageContainer.closest(".salina-pdf-viewer, .pdf-container, .pdf-viewer");
-    const scrollOffset = {
-      x: viewerContainer?.scrollLeft || 0,
-      y: viewerContainer?.scrollTop || 0
-    };
-    return {
-      pageContainer,
-      textLayer,
-      containerRect,
-      textLayerRect,
-      scrollOffset
-    };
-  }
-  /**
-   * Calculate accurate highlight position with proper coordinate transformation
-   */
-  renderHighlight(highlight) {
-    const existingElement = this.highlightElements.get(highlight.id);
-    if (existingElement) {
-      existingElement.remove();
+      element = element.parentNode;
     }
-    const positionInfo = this.getPositionInfo(highlight.pageNumber);
-    if (!positionInfo) return;
-    const { pageContainer, textLayer, containerRect, textLayerRect, scrollOffset } = positionInfo;
-    const highlightElement = document.createElement("div");
-    highlightElement.className = "salina-highlight";
-    highlightElement.setAttribute("data-highlight-id", highlight.id);
-    highlightElement.title = highlight.text;
-    const scaledPosition = {
-      x: highlight.position.x * this.scale,
-      y: highlight.position.y * this.scale,
-      width: highlight.position.width * this.scale,
-      height: highlight.position.height * this.scale
-    };
-    Object.assign(highlightElement.style, {
-      position: "absolute",
-      left: `${scaledPosition.x}px`,
-      top: `${scaledPosition.y}px`,
-      width: `${scaledPosition.width}px`,
-      height: `${scaledPosition.height}px`,
-      backgroundColor: highlight.color,
-      pointerEvents: "auto",
-      borderRadius: "2px",
-      zIndex: "10",
-      mixBlendMode: "multiply",
-      opacity: "0.4",
-      transition: "opacity 0.2s ease, transform 0.2s ease",
-      cursor: "pointer",
-      // Add a subtle outline to improve visibility
-      outline: "1px solid transparent",
-      boxSizing: "border-box"
-    });
-    highlightElement.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.handleHighlightClick(highlight);
-    });
-    highlightElement.addEventListener("mouseenter", () => {
-      highlightElement.style.opacity = "0.6";
-      highlightElement.style.transform = "scale(1.01)";
-      highlightElement.style.outline = "1px solid rgba(0, 123, 255, 0.3)";
-    });
-    highlightElement.addEventListener("mouseleave", () => {
-      highlightElement.style.opacity = "0.4";
-      highlightElement.style.transform = "scale(1)";
-      highlightElement.style.outline = "1px solid transparent";
-    });
-    pageContainer.appendChild(highlightElement);
-    this.highlightElements.set(highlight.id, highlightElement);
+    return null;
   }
-  /**
-   * Create highlight from text selection with accurate coordinate calculation
-   */
-  createHighlightFromSelection(selection, pageNumber, color = this.options.defaultColor) {
-    if (!selection.rangeCount) return null;
-    const range = selection.getRangeAt(0);
-    const text = selection.toString().trim();
-    if (!text) return null;
-    const positionInfo = this.getPositionInfo(pageNumber);
-    if (!positionInfo) return null;
-    const { pageContainer, containerRect } = positionInfo;
+  createHighlightRectangles(range, pageContainer) {
+    const pageRect = pageContainer.getBoundingClientRect();
     const rects = range.getClientRects();
-    const highlights = [];
-    Array.from(rects).forEach((rect, index) => {
+    const rectangles = [];
+    Array.from(rects).forEach((rect) => {
       if (rect.width > 0 && rect.height > 0) {
-        const relativeX = rect.left - containerRect.left;
-        const relativeY = rect.top - containerRect.top;
-        const normalizedPosition = {
+        const relativeX = rect.left - pageRect.left;
+        const relativeY = rect.top - pageRect.top;
+        rectangles.push({
           x: relativeX / this.scale,
           y: relativeY / this.scale,
           width: rect.width / this.scale,
           height: rect.height / this.scale
-        };
-        const highlight = {
-          id: this.generateHighlightId(),
-          text,
-          color,
-          position: normalizedPosition,
-          pageNumber,
-          timestamp: Date.now()
-        };
-        highlights.push(highlight);
-        this.addHighlight(highlight);
+        });
       }
     });
-    return highlights.length > 0 ? highlights : null;
+    return rectangles;
   }
-  generateHighlightId() {
-    return `highlight_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  setActiveHighlight(highlight) {
+    this.clearHighlights();
+    this.activeHighlight = highlight;
+    this.renderHighlights();
+    if (this.options.copyHintEnabled) {
+      this.renderCopyHint();
+    }
   }
-  handleHighlightClick(highlight) {
-    const event = new CustomEvent("salina:highlight:click", {
-      detail: { highlight },
-      bubbles: true
+  renderHighlights() {
+    if (!this.activeHighlight) return;
+    const pageContainer = document.getElementById(
+      `page-${this.activeHighlight.pageNumber}`
+    );
+    if (!pageContainer) return;
+    this.activeHighlight.rectangles.forEach((rect, index) => {
+      const highlightElement = document.createElement("div");
+      highlightElement.className = "salina-highlight salina-simple-highlight";
+      highlightElement.setAttribute(
+        "data-page",
+        this.activeHighlight.pageNumber.toString()
+      );
+      highlightElement.title = this.activeHighlight.text;
+      Object.assign(highlightElement.style, {
+        position: "absolute",
+        left: `${rect.x * this.scale}px`,
+        top: `${rect.y * this.scale}px`,
+        width: `${rect.width * this.scale}px`,
+        height: `${rect.height * this.scale}px`,
+        backgroundColor: this.options.highlightColor,
+        borderRadius: "2px",
+        pointerEvents: "none",
+        zIndex: "5",
+        mixBlendMode: "multiply",
+        transition: "background-color 0.2s ease"
+      });
+      pageContainer.appendChild(highlightElement);
+      this.highlightElements.push(highlightElement);
     });
-    document.dispatchEvent(event);
+  }
+  renderCopyHint() {
+    if (!this.activeHighlight || this.activeHighlight.rectangles.length === 0)
+      return;
+    const pageContainer = document.getElementById(
+      `page-${this.activeHighlight.pageNumber}`
+    );
+    if (!pageContainer) return;
+    const firstRect = this.activeHighlight.rectangles[0];
+    const copyHint = document.createElement("div");
+    copyHint.className = "salina-copy-hint";
+    Object.assign(copyHint.style, {
+      position: "absolute",
+      left: `${firstRect.x * this.scale}px`,
+      top: `${(firstRect.y - 30) * this.scale}px`,
+      zIndex: "10",
+      animation: "fadeIn 0.3s ease-out",
+      pointerEvents: "auto"
+    });
+    const bubble = document.createElement("div");
+    bubble.className = "salina-copy-hint-bubble";
+    bubble.textContent = "\u{1F4CB} Copy (Ctrl+C)";
+    Object.assign(bubble.style, {
+      background: "rgba(0, 0, 0, 0.8)",
+      color: "white",
+      padding: "4px 8px",
+      borderRadius: "4px",
+      fontSize: "12px",
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      cursor: "pointer",
+      userSelect: "none",
+      whiteSpace: "nowrap",
+      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
+      transition: "all 0.2s ease",
+      opacity: "0.9"
+    });
+    bubble.addEventListener("click", this.copyToClipboard.bind(this));
+    bubble.addEventListener("mouseenter", () => {
+      bubble.style.background = "rgba(0, 0, 0, 0.9)";
+      bubble.style.opacity = "1";
+      bubble.style.transform = "translateY(-1px)";
+    });
+    bubble.addEventListener("mouseleave", () => {
+      bubble.style.background = "rgba(0, 0, 0, 0.8)";
+      bubble.style.opacity = "0.9";
+      bubble.style.transform = "translateY(0)";
+    });
+    copyHint.appendChild(bubble);
+    pageContainer.appendChild(copyHint);
+    this.copyHintElement = copyHint;
+  }
+  async copyToClipboard() {
+    if (!this.activeHighlight) return;
+    try {
+      await navigator.clipboard.writeText(this.activeHighlight.text);
+      console.log(
+        "Highlighted text copied to clipboard:",
+        this.activeHighlight.text
+      );
+      this.highlightElements.forEach((element) => {
+        element.classList.add("copied");
+        element.style.backgroundColor = "rgba(0, 255, 0, 0.6)";
+        element.style.transform = "scale(1.02)";
+        setTimeout(() => {
+          element.classList.remove("copied");
+          element.style.backgroundColor = this.options.highlightColor;
+          element.style.transform = "scale(1)";
+        }, 500);
+      });
+    } catch (err) {
+      console.error("Failed to copy text:", err);
+    }
+  }
+  rerenderHighlights() {
+    if (this.activeHighlight) {
+      this.clearHighlights();
+      this.renderHighlights();
+      if (this.options.copyHintEnabled) {
+        this.renderCopyHint();
+      }
+    }
+  }
+  clearHighlights() {
+    this.highlightElements.forEach((element) => {
+      element.remove();
+    });
+    this.highlightElements = [];
+    if (this.copyHintElement) {
+      this.copyHintElement.remove();
+      this.copyHintElement = null;
+    }
+    this.activeHighlight = null;
+  }
+  getActiveHighlight() {
+    return this.activeHighlight;
+  }
+  destroy() {
+    this.clearHighlights();
+    document.removeEventListener("mouseup", this.handleMouseUp.bind(this));
+    document.removeEventListener("click", this.handleDocumentClick.bind(this));
+    document.removeEventListener("keydown", this.handleKeyDown.bind(this));
   }
 };
 
@@ -676,6 +747,360 @@ var PDFRenderer = class {
   }
 };
 
+// src/SalinaPDFViewer.ts
+var SalinaPDFViewer = class extends import_eventemitter3.EventEmitter {
+  constructor(options) {
+    super();
+    this.plugins = /* @__PURE__ */ new Map();
+    this.container = options.container;
+    this.options = this.mergeOptions(options);
+    this.state = this.initializeState();
+    this.pdfRenderer = new PDFRenderer(this.container, this.options);
+    this.simpleHighlighter = new SimpleHighlighter({
+      highlightColor: this.options.highlighting.defaultColor || "rgba(255, 255, 0, 0.3)",
+      copyHintEnabled: true
+    });
+    this.searchEngine = new SearchEngine({
+      highlightColor: this.options.search.highlightColor || "rgba(255, 165, 0, 0.6)",
+      caseSensitive: this.options.search.caseSensitive || false,
+      wholeWords: this.options.search.wholeWords || false
+    });
+    this.setupContainer();
+    this.setupEventListeners();
+    this.setupResizeObserver();
+    if (options.file) {
+      this.loadDocument(options.file);
+    }
+  }
+  async loadDocument(file) {
+    try {
+      this.setState({ isLoading: true, error: null });
+      const totalPages = await this.pdfRenderer.loadDocument(file);
+      this.setState({
+        totalPages,
+        currentPage: 1,
+        isLoading: false
+      });
+      this.emit("document:loaded", totalPages);
+      this.options.callbacks.onLoad?.(totalPages);
+    } catch (error) {
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      this.setState({ error: errorObj.message, isLoading: false });
+      this.emit("document:error", errorObj);
+      this.options.callbacks.onError?.(errorObj);
+      throw errorObj;
+    }
+  }
+  destroy() {
+    this.resizeObserver?.disconnect();
+    this.pdfRenderer.destroy();
+    this.simpleHighlighter.destroy();
+    this.searchEngine.destroy();
+    this.removeAllListeners();
+    this.container.innerHTML = "";
+  }
+  // Navigation
+  goToPage(page) {
+    if (page < 1 || page > this.state.totalPages) return;
+    this.setState({ currentPage: page });
+    this.pdfRenderer.goToPage(page);
+    this.emit("page:changed", page, this.state.totalPages);
+    this.options.callbacks.onPageChange?.(page, this.state.totalPages);
+  }
+  nextPage() {
+    this.goToPage(this.state.currentPage + 1);
+  }
+  prevPage() {
+    this.goToPage(this.state.currentPage - 1);
+  }
+  // Zoom controls
+  zoomIn() {
+    const newScale = Math.min(
+      this.options.zoom.max,
+      this.state.scale + this.options.zoom.step
+    );
+    this.setZoom(newScale);
+  }
+  zoomOut() {
+    const newScale = Math.max(
+      this.options.zoom.min,
+      this.state.scale - this.options.zoom.step
+    );
+    this.setZoom(newScale);
+  }
+  setZoom(scale) {
+    const clampedScale = Math.max(
+      this.options.zoom.min,
+      Math.min(this.options.zoom.max, scale)
+    );
+    if (clampedScale !== this.state.scale) {
+      this.state.scale = clampedScale;
+      this.simpleHighlighter.updateScale(clampedScale);
+      this.pdfRenderer.setScale(clampedScale);
+      this.emit("zoom:changed", clampedScale);
+      this.options.callbacks.onZoom?.(clampedScale);
+    }
+  }
+  fitToWidth() {
+    if (!this.container) return;
+    const scale = this.pdfRenderer.calculateFitToWidthScale();
+    this.setZoom(scale);
+  }
+  fitToHeight() {
+    if (!this.container) return;
+    const scale = this.pdfRenderer.calculateFitToHeightScale();
+    this.setZoom(scale);
+  }
+  // Search
+  search(query) {
+    if (!query.trim()) {
+      this.clearSearch();
+      return [];
+    }
+    this.setState({ searchQuery: query });
+    const results = this.searchEngine.search(
+      query,
+      this.pdfRenderer.getTextContent()
+    );
+    this.setState({
+      searchResults: results,
+      currentSearchIndex: results.length > 0 ? 0 : -1
+    });
+    this.emit("search:results", results);
+    this.options.callbacks.onSearch?.(results);
+    return results;
+  }
+  clearSearch() {
+    this.setState({
+      searchQuery: "",
+      searchResults: [],
+      currentSearchIndex: -1
+    });
+    this.searchEngine.clearResults();
+    this.emit("search:cleared");
+  }
+  nextSearchResult() {
+    if (this.state.searchResults.length === 0) return;
+    const nextIndex = (this.state.currentSearchIndex + 1) % this.state.searchResults.length;
+    this.setState({ currentSearchIndex: nextIndex });
+    const result = this.state.searchResults[nextIndex];
+    this.goToPage(result.pageNumber);
+  }
+  prevSearchResult() {
+    if (this.state.searchResults.length === 0) return;
+    const prevIndex = this.state.currentSearchIndex === 0 ? this.state.searchResults.length - 1 : this.state.currentSearchIndex - 1;
+    this.setState({ currentSearchIndex: prevIndex });
+    const result = this.state.searchResults[prevIndex];
+    this.goToPage(result.pageNumber);
+  }
+  // Simple highlighting methods
+  getActiveHighlight() {
+    return this.simpleHighlighter.getActiveHighlight();
+  }
+  clearHighlights() {
+    this.simpleHighlighter.clearHighlights();
+    this.emit("highlight:cleared");
+  }
+  // Legacy API methods for compatibility (simplified)
+  addHighlight() {
+    console.warn(
+      "addHighlight: Simple highlighter only supports mouse-based highlighting"
+    );
+  }
+  removeHighlight() {
+    this.clearHighlights();
+    return true;
+  }
+  getHighlights() {
+    const active = this.getActiveHighlight();
+    return active ? [active] : [];
+  }
+  exportHighlights() {
+    const active = this.getActiveHighlight();
+    return JSON.stringify(active ? [active] : [], null, 2);
+  }
+  importHighlights() {
+    console.warn(
+      "importHighlights: Simple highlighter doesn't support highlight importing"
+    );
+  }
+  // Plugin System
+  use(plugin) {
+    if (this.plugins.has(plugin.name)) {
+      throw new Error(`Plugin '${plugin.name}' is already installed`);
+    }
+    plugin.install(this);
+    this.plugins.set(plugin.name, plugin);
+  }
+  unuse(pluginName) {
+    const plugin = this.plugins.get(pluginName);
+    if (plugin) {
+      plugin.uninstall(this);
+      this.plugins.delete(pluginName);
+    }
+  }
+  // Getters
+  getCurrentPage() {
+    return this.state.currentPage;
+  }
+  getTotalPages() {
+    return this.state.totalPages;
+  }
+  getScale() {
+    return this.state.scale;
+  }
+  getSearchResults() {
+    return this.state.searchResults;
+  }
+  getCurrentSearchIndex() {
+    return this.state.currentSearchIndex;
+  }
+  isLoading() {
+    return this.state.isLoading;
+  }
+  getError() {
+    return this.state.error;
+  }
+  // Private Methods
+  mergeOptions(options) {
+    return {
+      container: options.container,
+      file: options.file ?? void 0,
+      theme: options.theme ?? "light",
+      width: options.width ?? "100%",
+      height: options.height ?? "100%",
+      features: {
+        highlighting: true,
+        search: true,
+        navigation: true,
+        zoom: true,
+        fullscreen: false,
+        print: false,
+        download: false,
+        export: true,
+        annotations: false,
+        ...options.features
+      },
+      highlighting: {
+        defaultColor: "rgba(255, 255, 0, 0.3)",
+        allowMultipleColors: false,
+        // Simple highlighter uses single color
+        persistHighlights: false,
+        // Simple highlighter is non-persistent
+        ...options.highlighting
+      },
+      search: {
+        highlightColor: "rgba(255, 165, 0, 0.6)",
+        caseSensitive: false,
+        wholeWords: false,
+        ...options.search
+      },
+      zoom: {
+        min: options.zoom?.min ?? 0.5,
+        max: options.zoom?.max ?? 3,
+        step: options.zoom?.step ?? 0.2,
+        default: options.zoom?.default ?? 1,
+        fitToWidth: options.zoom?.fitToWidth ?? true,
+        fitToHeight: options.zoom?.fitToHeight ?? true,
+        ...options.zoom
+      },
+      callbacks: {
+        onLoad: () => {
+        },
+        onPageChange: () => {
+        },
+        onSearch: () => {
+        },
+        onHighlight: () => {
+        },
+        onHighlightRemove: () => {
+        },
+        onError: () => {
+        },
+        onZoom: () => {
+        },
+        ...options.callbacks
+      }
+    };
+  }
+  initializeState() {
+    return {
+      currentPage: 1,
+      totalPages: 0,
+      scale: this.options.zoom.default,
+      isLoading: false,
+      error: null,
+      searchQuery: "",
+      searchResults: [],
+      currentSearchIndex: -1
+    };
+  }
+  setState(updates) {
+    Object.assign(this.state, updates);
+  }
+  setupContainer() {
+    this.container.classList.add("salina-pdf-viewer");
+    this.container.setAttribute("data-theme", this.options.theme);
+    if (typeof this.options.width === "number") {
+      this.container.style.width = `${this.options.width}px`;
+    } else {
+      this.container.style.width = this.options.width;
+    }
+    if (typeof this.options.height === "number") {
+      this.container.style.height = `${this.options.height}px`;
+    } else {
+      this.container.style.height = this.options.height;
+    }
+  }
+  setupEventListeners() {
+    document.addEventListener("keydown", (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key) {
+          case "f":
+          case "F":
+            if (this.options.features.search) {
+              e.preventDefault();
+              this.emit("search:focus");
+            }
+            break;
+          case "+":
+          case "=":
+            e.preventDefault();
+            this.zoomIn();
+            break;
+          case "-":
+            e.preventDefault();
+            this.zoomOut();
+            break;
+          case "0":
+            e.preventDefault();
+            this.setZoom(1);
+            break;
+        }
+      }
+    });
+    let scrollTimeout;
+    const handleScroll = () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = window.setTimeout(() => {
+      }, 100);
+    };
+    this.container.addEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", handleScroll);
+    window.addEventListener("resize", () => {
+      this.pdfRenderer.handleResize();
+    });
+  }
+  setupResizeObserver() {
+    if (typeof ResizeObserver !== "undefined") {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.pdfRenderer.handleResize();
+      });
+      this.resizeObserver.observe(this.container);
+    }
+  }
+};
+
 // src/utils/helpers.ts
 function generateId() {
   return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
@@ -792,458 +1217,6 @@ async function retry(fn, maxAttempts = 3, baseDelay = 1e3) {
   }
   throw lastError;
 }
-
-// src/SalinaPDFViewer.ts
-var SalinaPDFViewer = class extends import_eventemitter3.EventEmitter {
-  constructor(options) {
-    super();
-    this.plugins = /* @__PURE__ */ new Map();
-    this.container = options.container;
-    this.options = this.mergeOptions(options);
-    this.state = this.initializeState();
-    this.pdfRenderer = new PDFRenderer(this.container, this.options);
-    this.highlightEngine = new HighlightEngine({
-      defaultColor: this.options.highlighting.defaultColor || "rgba(255, 255, 0, 0.4)",
-      allowMultipleColors: this.options.highlighting.allowMultipleColors || true,
-      persistHighlights: this.options.highlighting.persistHighlights || true
-    });
-    this.searchEngine = new SearchEngine({
-      highlightColor: this.options.search.highlightColor || "rgba(255, 165, 0, 0.6)",
-      caseSensitive: this.options.search.caseSensitive || false,
-      wholeWords: this.options.search.wholeWords || false
-    });
-    this.setupContainer();
-    this.setupEventListeners();
-    this.setupResizeObserver();
-    if (options.file) {
-      this.loadDocument(options.file);
-    }
-  }
-  // Public API Methods
-  async loadDocument(file) {
-    try {
-      this.setState({ isLoading: true, error: null });
-      const totalPages = await this.pdfRenderer.loadDocument(file);
-      this.setState({
-        totalPages,
-        currentPage: 1,
-        isLoading: false
-      });
-      this.emit("document:loaded", totalPages);
-      this.options.callbacks.onLoad?.(totalPages);
-    } catch (error) {
-      const errorObj = error instanceof Error ? error : new Error(String(error));
-      this.setState({ error: errorObj.message, isLoading: false });
-      this.emit("document:error", errorObj);
-      this.options.callbacks.onError?.(errorObj);
-      throw errorObj;
-    }
-  }
-  destroy() {
-    this.resizeObserver?.disconnect();
-    this.pdfRenderer.destroy();
-    this.highlightEngine.destroy();
-    this.searchEngine.destroy();
-    this.removeAllListeners();
-    this.container.innerHTML = "";
-  }
-  // Navigation
-  goToPage(page) {
-    if (page < 1 || page > this.state.totalPages) return;
-    this.setState({ currentPage: page });
-    this.pdfRenderer.goToPage(page);
-    this.emit("page:changed", page, this.state.totalPages);
-    this.options.callbacks.onPageChange?.(page, this.state.totalPages);
-  }
-  nextPage() {
-    this.goToPage(this.state.currentPage + 1);
-  }
-  prevPage() {
-    this.goToPage(this.state.currentPage - 1);
-  }
-  // Zoom controls
-  zoomIn() {
-    const newScale = Math.min(this.options.zoom.max, this.state.scale + this.options.zoom.step);
-    this.setZoom(newScale);
-  }
-  zoomOut() {
-    const newScale = Math.max(this.options.zoom.min, this.state.scale - this.options.zoom.step);
-    this.setZoom(newScale);
-  }
-  setZoom(scale) {
-    const clampedScale = Math.max(this.options.zoom.min, Math.min(this.options.zoom.max, scale));
-    if (clampedScale !== this.state.scale) {
-      this.state.scale = clampedScale;
-      this.highlightEngine.updateScale(clampedScale);
-      this.pdfRenderer.setScale(clampedScale);
-      this.emit("zoom:changed", clampedScale);
-      this.options.callbacks.onZoom?.(clampedScale);
-    }
-  }
-  fitToWidth() {
-    if (!this.container) return;
-    const scale = this.pdfRenderer.calculateFitToWidthScale();
-    this.setZoom(scale);
-  }
-  fitToHeight() {
-    if (!this.container) return;
-    const scale = this.pdfRenderer.calculateFitToHeightScale();
-    this.setZoom(scale);
-  }
-  // Search
-  search(query) {
-    if (!query.trim()) {
-      this.clearSearch();
-      return [];
-    }
-    this.setState({ searchQuery: query });
-    const results = this.searchEngine.search(query, this.pdfRenderer.getTextContent());
-    this.setState({
-      searchResults: results,
-      currentSearchIndex: results.length > 0 ? 0 : -1
-    });
-    this.emit("search:results", results);
-    this.options.callbacks.onSearch?.(results);
-    return results;
-  }
-  clearSearch() {
-    this.setState({
-      searchQuery: "",
-      searchResults: [],
-      currentSearchIndex: -1
-    });
-    this.searchEngine.clearResults();
-    this.emit("search:cleared");
-  }
-  nextSearchResult() {
-    if (this.state.searchResults.length === 0) return;
-    const nextIndex = (this.state.currentSearchIndex + 1) % this.state.searchResults.length;
-    this.setState({ currentSearchIndex: nextIndex });
-    const result = this.state.searchResults[nextIndex];
-    this.goToPage(result.pageNumber);
-  }
-  prevSearchResult() {
-    if (this.state.searchResults.length === 0) return;
-    const prevIndex = this.state.currentSearchIndex === 0 ? this.state.searchResults.length - 1 : this.state.currentSearchIndex - 1;
-    this.setState({ currentSearchIndex: prevIndex });
-    const result = this.state.searchResults[prevIndex];
-    this.goToPage(result.pageNumber);
-  }
-  // Highlighting
-  addHighlight(highlight) {
-    const fullHighlight = {
-      ...highlight,
-      id: generateId(),
-      timestamp: Date.now()
-    };
-    this.state.highlights.set(fullHighlight.id, fullHighlight);
-    this.highlightEngine.addHighlight(fullHighlight);
-    this.emit("highlight:added", fullHighlight);
-    this.options.callbacks.onHighlight?.(fullHighlight);
-    return fullHighlight;
-  }
-  removeHighlight(id) {
-    const removed = this.state.highlights.delete(id);
-    if (removed) {
-      this.highlightEngine.removeHighlight(id);
-      this.emit("highlight:removed", id);
-      this.options.callbacks.onHighlightRemove?.(id);
-    }
-    return removed;
-  }
-  clearHighlights() {
-    this.state.highlights.clear();
-    this.highlightEngine.clearHighlights();
-    this.emit("highlight:cleared");
-  }
-  getHighlights() {
-    return Array.from(this.state.highlights.values());
-  }
-  exportHighlights(format = "json") {
-    const highlights = this.getHighlights();
-    if (format === "json") {
-      return JSON.stringify(highlights, null, 2);
-    }
-    const headers = ["id", "text", "pageNumber", "x", "y", "width", "height", "color", "timestamp"];
-    const csvData = highlights.map((h) => [
-      h.id,
-      `"${h.text.replace(/"/g, '""')}"`,
-      h.pageNumber,
-      h.position.x,
-      h.position.y,
-      h.position.width,
-      h.position.height,
-      h.color,
-      h.timestamp
-    ].join(","));
-    return [headers.join(","), ...csvData].join("\n");
-  }
-  importHighlights(data, format = "json") {
-    try {
-      let highlights;
-      if (format === "json") {
-        highlights = JSON.parse(data);
-      } else {
-        const lines = data.split("\n").filter((line) => line.trim());
-        if (lines.length < 2) throw new Error("Invalid CSV format");
-        highlights = lines.slice(1).map((line) => {
-          const values = this.parseCSVLine(line);
-          if (values.length < 8) throw new Error("Invalid CSV row format");
-          return {
-            id: values[0],
-            text: values[1].replace(/^"|"$/g, "").replace(/""/g, '"'),
-            pageNumber: parseInt(values[2]),
-            position: {
-              x: parseFloat(values[3]),
-              y: parseFloat(values[4]),
-              width: parseFloat(values[5]),
-              height: parseFloat(values[6])
-            },
-            color: values[7],
-            timestamp: parseInt(values[8])
-          };
-        });
-      }
-      const validHighlights = highlights.filter(
-        (h) => h.id && h.text && h.pageNumber > 0 && h.position && h.color
-      );
-      if (validHighlights.length !== highlights.length) {
-        console.warn(`Filtered out ${highlights.length - validHighlights.length} invalid highlights`);
-      }
-      this.clearHighlights();
-      validHighlights.forEach((highlight) => {
-        this.state.highlights.set(highlight.id, highlight);
-        this.highlightEngine.addHighlight(highlight);
-      });
-    } catch (error) {
-      throw new Error(`Failed to import highlights: ${error}`);
-    }
-  }
-  parseCSVLine(line) {
-    const result = [];
-    let current = "";
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      if (char === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          current += '"';
-          i++;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (char === "," && !inQuotes) {
-        result.push(current);
-        current = "";
-      } else {
-        current += char;
-      }
-    }
-    result.push(current);
-    return result;
-  }
-  // Plugin System
-  use(plugin) {
-    if (this.plugins.has(plugin.name)) {
-      throw new Error(`Plugin '${plugin.name}' is already installed`);
-    }
-    plugin.install(this);
-    this.plugins.set(plugin.name, plugin);
-  }
-  unuse(pluginName) {
-    const plugin = this.plugins.get(pluginName);
-    if (plugin) {
-      plugin.uninstall(this);
-      this.plugins.delete(pluginName);
-    }
-  }
-  // Getters
-  getCurrentPage() {
-    return this.state.currentPage;
-  }
-  getTotalPages() {
-    return this.state.totalPages;
-  }
-  getScale() {
-    return this.state.scale;
-  }
-  getSearchResults() {
-    return this.state.searchResults;
-  }
-  getCurrentSearchIndex() {
-    return this.state.currentSearchIndex;
-  }
-  isLoading() {
-    return this.state.isLoading;
-  }
-  getError() {
-    return this.state.error;
-  }
-  // Private Methods
-  mergeOptions(options) {
-    return {
-      container: options.container,
-      file: options.file ?? void 0,
-      theme: options.theme ?? "light",
-      width: options.width ?? "100%",
-      height: options.height ?? "100%",
-      features: {
-        highlighting: true,
-        search: true,
-        zoom: true,
-        export: true,
-        annotations: false,
-        ...options.features
-      },
-      highlighting: {
-        defaultColor: "rgba(255, 255, 0, 0.4)",
-        allowMultipleColors: true,
-        persistHighlights: true,
-        ...options.highlighting
-      },
-      search: {
-        highlightColor: "rgba(255, 165, 0, 0.6)",
-        caseSensitive: false,
-        wholeWords: false,
-        ...options.search
-      },
-      zoom: {
-        min: options.zoom?.min ?? 0.5,
-        max: options.zoom?.max ?? 3,
-        step: options.zoom?.step ?? 0.2,
-        fitToWidth: options.zoom?.fitToWidth ?? true,
-        fitToHeight: options.zoom?.fitToHeight ?? true,
-        ...options.zoom
-      },
-      callbacks: {
-        onHighlight: () => {
-        },
-        onHighlightRemove: () => {
-        },
-        onSearch: () => {
-        },
-        onPageChange: () => {
-        },
-        onLoad: () => {
-        },
-        onError: () => {
-        },
-        onZoom: () => {
-        },
-        ...options.callbacks
-      }
-    };
-  }
-  initializeState() {
-    return {
-      currentPage: 1,
-      totalPages: 0,
-      scale: 1,
-      isLoading: false,
-      error: null,
-      searchQuery: "",
-      searchResults: [],
-      currentSearchIndex: -1,
-      highlights: /* @__PURE__ */ new Map()
-    };
-  }
-  setState(updates) {
-    Object.assign(this.state, updates);
-  }
-  setupContainer() {
-    this.container.classList.add("salina-pdf-viewer");
-    this.container.setAttribute("data-theme", this.options.theme);
-    if (typeof this.options.width === "number") {
-      this.container.style.width = `${this.options.width}px`;
-    } else {
-      this.container.style.width = this.options.width;
-    }
-    if (typeof this.options.height === "number") {
-      this.container.style.height = `${this.options.height}px`;
-    } else {
-      this.container.style.height = this.options.height;
-    }
-  }
-  setupEventListeners() {
-    if (this.options.features.highlighting) {
-      document.addEventListener("mouseup", () => this.handleTextSelection());
-    }
-    document.addEventListener("keydown", (e) => {
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key) {
-          case "f":
-          case "F":
-            if (this.options.features.search) {
-              e.preventDefault();
-              this.emit("search:focus");
-            }
-            break;
-          case "+":
-          case "=":
-            e.preventDefault();
-            this.zoomIn();
-            break;
-          case "-":
-            e.preventDefault();
-            this.zoomOut();
-            break;
-          case "0":
-            e.preventDefault();
-            this.setZoom(1);
-            break;
-        }
-      }
-    });
-    let scrollTimeout;
-    const handleScroll = () => {
-      clearTimeout(scrollTimeout);
-      scrollTimeout = window.setTimeout(() => {
-        if (this.options.features.highlighting) {
-          this.highlightEngine.updateVisibleHighlights();
-        }
-      }, 100);
-    };
-    this.container.addEventListener("scroll", handleScroll);
-    window.addEventListener("scroll", handleScroll);
-    window.addEventListener("resize", () => {
-      if (this.options.features.highlighting) {
-        this.highlightEngine.handleViewportChange();
-      }
-      this.pdfRenderer.handleResize();
-    });
-  }
-  setupResizeObserver() {
-    if (typeof ResizeObserver !== "undefined") {
-      this.resizeObserver = new ResizeObserver(() => {
-        this.pdfRenderer.handleResize();
-      });
-      this.resizeObserver.observe(this.container);
-    }
-  }
-  async handleTextSelection() {
-    const selection = window.getSelection();
-    if (!selection || !selection.toString().trim()) return;
-    const range = selection.getRangeAt(0);
-    const text = selection.toString();
-    const pageElement = range.commonAncestorContainer.nodeType === Node.TEXT_NODE ? range.commonAncestorContainer.parentElement?.closest(".salina-pdf-page") : range.commonAncestorContainer.closest(".salina-pdf-page");
-    if (!pageElement) return;
-    const pageNumberAttr = pageElement.getAttribute("data-page-number");
-    const pageNumber = parseInt(pageNumberAttr || "1");
-    const highlights = this.highlightEngine.createHighlightFromSelection(
-      selection,
-      pageNumber,
-      this.options.highlighting.defaultColor
-    );
-    if (highlights) {
-      highlights.forEach((highlight) => {
-        this.state.highlights.set(highlight.id, highlight);
-        this.emit("highlight:added", highlight);
-        this.options.callbacks.onHighlight?.(highlight);
-      });
-    }
-    selection.removeAllRanges();
-  }
-};
 
 // src/utils/performance.ts
 var PerformanceOptimizer = class {
@@ -1414,15 +1387,15 @@ var VirtualScrolling = class {
 };
 
 // src/index.ts
-var VERSION = "1.0.0";
+var VERSION = "3.0.2";
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  HighlightEngine,
   MemoryManager,
   PDFRenderer,
   PerformanceOptimizer,
   SalinaPDFViewer,
   SearchEngine,
+  SimpleHighlighter,
   VERSION,
   VirtualScrolling,
   clamp,

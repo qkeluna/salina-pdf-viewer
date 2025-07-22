@@ -1,5 +1,5 @@
 // Main exports
-export { SalinaPDFViewer } from './SalinaPDFViewer'
+export { SalinaPDFViewer } from "./SalinaPDFViewer";
 
 // Type exports
 export type {
@@ -9,18 +9,23 @@ export type {
   PDFPage,
   ViewerState,
   SalinaPDFPlugin,
-  EventMap
-} from './types'
+  EventMap,
+} from "./types";
+
+export type { ActiveHighlight } from "./highlighting/SimpleHighlighter";
 
 // Engine exports
-export { HighlightEngine } from './highlighting/HighlightEngine'
-export { SearchEngine } from './search/SearchEngine'
-export { PDFRenderer } from './rendering/PDFRenderer'
+export { SimpleHighlighter } from "./highlighting/SimpleHighlighter";
+export { SearchEngine } from "./search/SearchEngine";
+export { PDFRenderer } from "./rendering/PDFRenderer";
 
 // Utility exports
-export * from './utils/helpers'
-export { PerformanceOptimizer, MemoryManager, VirtualScrolling } from './utils/performance'
+export * from "./utils/helpers";
+export {
+  PerformanceOptimizer,
+  MemoryManager,
+  VirtualScrolling,
+} from "./utils/performance";
 
 // Version
-export const VERSION = '1.0.0'
-
+export const VERSION = "3.0.2";

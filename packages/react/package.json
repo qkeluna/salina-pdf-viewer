@@ -1,6 +1,6 @@
 {
   "name": "@salina-app/pdf-viewer-react",
-  "version": "2.0.0",
+  "version": "3.0.2",
   "description": "React wrapper for Salina PDF Viewer",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.mjs",
@@ -36,11 +36,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/salina-team/pdf-viewer.git",
+    "url": "git+https://github.com/qkeluna/salina-pdf-viewer.git",
     "directory": "packages/react"
   },
   "peerDependencies": {
-    "@salina-app/pdf-viewer-core": "^2.0.0",
+    "@salina-app/pdf-viewer-core": "^3.0.2",
     "react": ">=16.8.0",
     "react-dom": ">=16.8.0"
   },

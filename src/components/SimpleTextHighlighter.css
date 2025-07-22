@@ -1,0 +1,92 @@
+.simple-text-highlighter {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  pointer-events: none;
+  background: transparent;
+}
+
+.simple-highlight {
+  transition: background-color 0.2s ease;
+}
+
+.simple-highlight.copied {
+  animation: flash-copy 0.5s ease-in-out;
+}
+
+@keyframes flash-copy {
+  0% {
+    background-color: rgba(255, 255, 0, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    background-color: rgba(0, 255, 0, 0.6) !important;
+    transform: scale(1.02);
+  }
+  100% {
+    background-color: rgba(255, 255, 0, 0.3);
+    transform: scale(1);
+  }
+}
+
+.copy-hint {
+  pointer-events: auto;
+  z-index: 10;
+}
+
+.copy-hint-bubble {
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+  opacity: 0.9;
+}
+
+.copy-hint-bubble:hover {
+  background: rgba(0, 0, 0, 0.9);
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+.copy-hint-bubble:active {
+  transform: translateY(0);
+}
+
+/* Fade in animation for copy hint */
+.copy-hint {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .copy-hint-bubble {
+    background: rgba(255, 255, 255, 0.9);
+    color: #333;
+  }
+
+  .copy-hint-bubble:hover {
+    background: rgba(255, 255, 255, 1);
+  }
+}

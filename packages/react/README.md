@@ -1,4 +1,4 @@
-# @salina/pdf-viewer-react
+# @salina-app/pdf-viewer-react
 
 React components and hooks for the Salina PDF Viewer library.
 
@@ -14,7 +14,7 @@ React components and hooks for the Salina PDF Viewer library.
 ## Installation
 
 ```bash
-npm install @salina/pdf-viewer-react @salina/pdf-viewer-core
+npm install @salina-app/pdf-viewer-react @salina-app/pdf-viewer-core
 ```
 
 ### Peer Dependencies
@@ -27,7 +27,7 @@ npm install react react-dom pdfjs-dist@^5.3.0
 
 ```tsx
 import React from "react";
-import { SalinaPDFViewer } from "@salina/pdf-viewer-react";
+import { SalinaPDFViewer } from "@salina-app/pdf-viewer-react";
 
 function App() {
   return (
@@ -52,7 +52,7 @@ export default App;
 The main PDF viewer component.
 
 ```tsx
-import { SalinaPDFViewer } from "@salina/pdf-viewer-react";
+import { SalinaPDFViewer } from "@salina-app/pdf-viewer-react";
 
 <SalinaPDFViewer
   url="/document.pdf"
@@ -97,7 +97,7 @@ interface SalinaPDFViewerProps {
 A customizable toolbar component for PDF controls.
 
 ```tsx
-import { PDFViewerToolbar } from "@salina/pdf-viewer-react";
+import { PDFViewerToolbar } from "@salina-app/pdf-viewer-react";
 
 <PDFViewerToolbar
   onZoomIn={() => viewer.zoomIn()}
@@ -116,7 +116,7 @@ import { PDFViewerToolbar } from "@salina/pdf-viewer-react";
 A hook for programmatic control of the PDF viewer.
 
 ```tsx
-import { usePDFViewer } from "@salina/pdf-viewer-react";
+import { usePDFViewer } from "@salina-app/pdf-viewer-react";
 
 function MyComponent() {
   const {
@@ -162,7 +162,7 @@ function MyComponent() {
 A hook for managing highlights.
 
 ```tsx
-import { useHighlights } from "@salina/pdf-viewer-react";
+import { useHighlights } from "@salina-app/pdf-viewer-react";
 
 function HighlightManager() {
   const {
@@ -202,7 +202,7 @@ function HighlightManager() {
 A hook for advanced search functionality.
 
 ```tsx
-import { usePDFSearch } from "@salina/pdf-viewer-react";
+import { usePDFSearch } from "@salina-app/pdf-viewer-react";
 
 function SearchComponent() {
   const {
@@ -248,7 +248,7 @@ import {
   SalinaPDFViewer,
   PDFViewerToolbar,
   usePDFViewer,
-} from "@salina/pdf-viewer-react";
+} from "@salina-app/pdf-viewer-react";
 
 function CustomPDFViewer({ url }: { url: string }) {
   const viewerRef = useRef(null);
@@ -279,7 +279,7 @@ function CustomPDFViewer({ url }: { url: string }) {
 
 ```tsx
 import React, { useState } from "react";
-import { SalinaPDFViewer, useHighlights } from "@salina/pdf-viewer-react";
+import { SalinaPDFViewer, useHighlights } from "@salina-app/pdf-viewer-react";
 
 function PDFWithHighlights() {
   const { highlights, addHighlight, removeHighlight } = useHighlights();
@@ -331,7 +331,7 @@ function PDFWithHighlights() {
 The React components inherit styles from the core library. Import the styles in your app:
 
 ```tsx
-import "@salina/pdf-viewer-core/styles";
+import "@salina-app/pdf-viewer-core/styles";
 ```
 
 ### Custom CSS
@@ -363,7 +363,7 @@ import {
   type PDFViewerProps,
   type HighlightAnnotation,
   type SearchResult,
-} from "@salina/pdf-viewer-react";
+} from "@salina-app/pdf-viewer-react";
 ```
 
 ## Requirements

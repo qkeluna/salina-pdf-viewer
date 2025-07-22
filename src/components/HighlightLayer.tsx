@@ -50,9 +50,16 @@ const HighlightLayer: React.FC<HighlightLayerProps> = ({
   // Copy text to clipboard
   const copyToClipboard = useCallback(
     async (text: string, highlightId?: string) => {
+      console.log("copyToClipboard called with:", text, highlightId);
+
+      if (!text || text.trim() === "") {
+        console.error("No text to copy");
+        return;
+      }
+
       try {
         await navigator.clipboard.writeText(text);
-        console.log("Text copied to clipboard:", text);
+        console.log("Text copied to clipboard successfully:", text);
 
         // Show visual feedback
         const targetHighlightId = highlightId || selectedHighlight;
@@ -67,9 +74,6 @@ const HighlightLayer: React.FC<HighlightLayerProps> = ({
             }, 500);
           }
         }
-
-        // Show success notification
-        alert("Text copied to clipboard!");
       } catch (err) {
         console.error("Failed to copy text: ", err);
         // Fallback for older browsers
@@ -85,46 +89,16 @@ const HighlightLayer: React.FC<HighlightLayerProps> = ({
           document.body.removeChild(textArea);
 
           if (successful) {
-            alert("Text copied to clipboard!");
+            console.log("Text copied using fallback method");
           } else {
-            alert(
-              "Failed to copy text. Please try selecting and copying manually."
-            );
+            console.warn("Failed to copy text using fallback method");
           }
         } catch (fallbackErr) {
           console.error("Fallback copy failed:", fallbackErr);
-          alert(
-            "Copy not supported. Please select text manually and use Ctrl+C."
-          );
         }
       }
     },
     [selectedHighlight]
-  );
-
-  // Handle keyboard shortcuts
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      // Only handle shortcuts when a highlight is selected
-      if (selectedHighlight) {
-        if ((e.metaKey || e.ctrlKey) && e.key === "c") {
-          const highlight = highlights.find(
-            (h: Highlight) => h.id === selectedHighlight
-          );
-          if (highlight) {
-            e.preventDefault();
-            e.stopPropagation();
-            copyToClipboard(highlight.text, selectedHighlight);
-          }
-        }
-      }
-
-      if (e.key === "Escape") {
-        setContextMenu((prev: ContextMenu) => ({ ...prev, visible: false }));
-        setSelectedHighlight(null);
-      }
-    },
-    [selectedHighlight, highlights, copyToClipboard]
   );
 
   // Handle right-click context menu
@@ -132,6 +106,12 @@ const HighlightLayer: React.FC<HighlightLayerProps> = ({
     (e: React.MouseEvent, highlight: Highlight) => {
       e.preventDefault();
       e.stopPropagation();
+
+      console.log(
+        "Context menu triggered for highlight:",
+        highlight.id,
+        highlight.text
+      );
 
       setContextMenu({
         visible: true,
@@ -156,16 +136,24 @@ const HighlightLayer: React.FC<HighlightLayerProps> = ({
     }
   }, []);
 
+  // Handle escape key to close context menu and clear selection
+  const handleDocumentKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      setContextMenu((prev: ContextMenu) => ({ ...prev, visible: false }));
+      setSelectedHighlight(null);
+    }
+  }, []);
+
   // Setup event listeners
   React.useEffect(() => {
-    document.addEventListener("keydown", handleKeyDown);
     document.addEventListener("click", handleClickOutside);
+    document.addEventListener("keydown", handleDocumentKeyDown);
 
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("click", handleClickOutside);
+      document.removeEventListener("keydown", handleDocumentKeyDown);
     };
-  }, [handleKeyDown, handleClickOutside]);
+  }, [handleClickOutside, handleDocumentKeyDown]);
 
   const pageHighlights = highlights.filter(
     (h: Highlight) => h.pageNumber === pageNumber
@@ -200,7 +188,7 @@ const HighlightLayer: React.FC<HighlightLayerProps> = ({
                 ? "0 0 6px rgba(0, 123, 255, 0.6)"
                 : "none",
           }}
-          title={`${highlight.text} (Right-click or Cmd+C to copy)`}
+          title={`${highlight.text}`}
           tabIndex={0}
           data-highlight-id={highlight.id}
           onClick={(e: React.MouseEvent) => {
@@ -210,6 +198,8 @@ const HighlightLayer: React.FC<HighlightLayerProps> = ({
               ...prev,
               visible: false,
             }));
+            // Focus the element so keyboard shortcuts work immediately
+            (e.currentTarget as HTMLElement).focus();
           }}
           onDoubleClick={(e: React.MouseEvent) => {
             e.stopPropagation();
@@ -222,6 +212,10 @@ const HighlightLayer: React.FC<HighlightLayerProps> = ({
           }
           onKeyDown={(e: React.KeyboardEvent) => {
             if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              copyToClipboard(highlight.text, highlight.id);
+            } else if ((e.metaKey || e.ctrlKey) && e.key === "c") {
               e.preventDefault();
               e.stopPropagation();
               copyToClipboard(highlight.text, highlight.id);
@@ -261,6 +255,11 @@ const HighlightLayer: React.FC<HighlightLayerProps> = ({
             onClick={(e: React.MouseEvent) => {
               e.preventDefault();
               e.stopPropagation();
+              console.log(
+                "Copy Text clicked",
+                contextMenu.text,
+                contextMenu.highlightId
+              );
               copyToClipboard(contextMenu.text, contextMenu.highlightId);
               setContextMenu((prev: ContextMenu) => ({
                 ...prev,
@@ -276,6 +275,10 @@ const HighlightLayer: React.FC<HighlightLayerProps> = ({
               onClick={(e: React.MouseEvent) => {
                 e.preventDefault();
                 e.stopPropagation();
+                console.log(
+                  "Remove Highlight clicked",
+                  contextMenu.highlightId
+                );
                 onRemoveHighlight(contextMenu.highlightId);
                 setContextMenu((prev: ContextMenu) => ({
                   ...prev,
@@ -286,8 +289,6 @@ const HighlightLayer: React.FC<HighlightLayerProps> = ({
               🗑️ Remove Highlight
             </div>
           )}
-          <div className="context-menu-separator"></div>
-          <div className="context-menu-info">Cmd+C / Ctrl+C to copy</div>
         </div>
       )}
     </div>

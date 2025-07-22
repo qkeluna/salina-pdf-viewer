@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@salina/pdf-viewer-core": "file:../../packages/core",
-    "@salina/pdf-viewer-react": "file:../../packages/react",
+    "@salina-app/pdf-viewer-core": "^2.0.1",
+    "@salina-app/pdf-viewer-react": "^2.0.1",
     "pdfjs-dist": "^5.3.93",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import type {
-  Highlight,
   SearchResult,
   SalinaPDFViewerOptions,
 } from "@salina-app/pdf-viewer-core";
@@ -19,8 +18,6 @@ export interface UsePDFViewerReturn {
   error: string | null;
   searchResults: SearchResult[];
   currentSearchIndex: number;
-  highlights: Highlight[];
-
   // Actions
   goToPage: (page: number) => void;
   nextPage: () => void;
@@ -34,14 +31,10 @@ export interface UsePDFViewerReturn {
   clearSearch: () => void;
   nextSearchResult: () => void;
   prevSearchResult: () => void;
-  addHighlight: (
-    highlight: Omit<Highlight, "id" | "timestamp">
-  ) => Highlight | undefined;
-  removeHighlight: (id: string) => boolean;
-  clearHighlights: () => void;
-  exportHighlights: (format?: "json" | "csv") => string;
-  importHighlights: (data: string, format?: "json" | "csv") => void;
   loadDocument: (file: File | string | ArrayBuffer) => Promise<void>;
+
+  // Simple highlighting (no state management needed - handled by SimpleHighlighter internally)
+  clearHighlights: () => void;
 
   // Ref and callbacks for SalinaPDFViewer component
   viewerRef: React.RefObject<SalinaPDFViewerRef | null>;
@@ -51,8 +44,6 @@ export interface UsePDFViewerReturn {
     onError: (error: Error) => void;
     onZoom: (scale: number) => void;
     onSearch: (results: SearchResult[]) => void;
-    onHighlight: (highlight: Highlight) => void;
-    onHighlightRemove: (highlightId: string) => void;
   };
 }
 
@@ -69,8 +60,6 @@ export function usePDFViewer(
   const [error, setError] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [currentSearchIndex, setCurrentSearchIndex] = useState(-1);
-  const [highlights, setHighlights] = useState<Highlight[]>([]);
-
   // Update state when viewer events fire
   const handlePageChange = useCallback((page: number, total: number) => {
     setCurrentPage(page);
@@ -95,14 +84,6 @@ export function usePDFViewer(
   const handleSearch = useCallback((results: SearchResult[]) => {
     setSearchResults(results);
     setCurrentSearchIndex(results.length > 0 ? 0 : -1);
-  }, []);
-
-  const handleHighlight = useCallback((highlight: Highlight) => {
-    setHighlights((prev) => [...prev, highlight]);
-  }, []);
-
-  const handleHighlightRemove = useCallback((highlightId: string) => {
-    setHighlights((prev) => prev.filter((h) => h.id !== highlightId));
   }, []);
 
   // Actions
@@ -166,34 +147,9 @@ export function usePDFViewer(
     );
   }, [searchResults.length]);
 
-  const addHighlight = useCallback(
-    (highlight: Omit<Highlight, "id" | "timestamp">) => {
-      return viewerRef.current?.addHighlight(highlight);
-    },
-    []
-  );
-
-  const removeHighlight = useCallback((id: string) => {
-    return viewerRef.current?.removeHighlight(id) || false;
-  }, []);
-
   const clearHighlights = useCallback(() => {
     viewerRef.current?.clearHighlights();
-    setHighlights([]);
   }, []);
-
-  const exportHighlights = useCallback((format: "json" | "csv" = "json") => {
-    return viewerRef.current?.exportHighlights(format) || "";
-  }, []);
-
-  const importHighlights = useCallback(
-    (data: string, format: "json" | "csv" = "json") => {
-      viewerRef.current?.importHighlights(data, format);
-      // Refresh highlights state
-      setHighlights(viewerRef.current?.getHighlights() || []);
-    },
-    []
-  );
 
   const loadDocument = useCallback(
     async (file: File | string | ArrayBuffer) => {
@@ -223,7 +179,6 @@ export function usePDFViewer(
     error,
     searchResults,
     currentSearchIndex,
-    highlights,
 
     // Actions
     goToPage,
@@ -238,11 +193,7 @@ export function usePDFViewer(
     clearSearch,
     nextSearchResult,
     prevSearchResult,
-    addHighlight,
-    removeHighlight,
     clearHighlights,
-    exportHighlights,
-    importHighlights,
     loadDocument,
 
     // Ref and callbacks
@@ -253,8 +204,6 @@ export function usePDFViewer(
       onError: handleError,
       onZoom: handleZoom,
       onSearch: handleSearch,
-      onHighlight: handleHighlight,
-      onHighlightRemove: handleHighlightRemove,
     },
   };
 }
