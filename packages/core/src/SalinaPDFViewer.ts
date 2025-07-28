@@ -10,6 +10,8 @@ import {
   type ActiveHighlight,
 } from "./highlighting/SimpleHighlighter";
 import { SearchEngine } from "./search/SearchEngine";
+import { TextLayerSearchEngine } from "./search/TextLayerSearchEngine";
+import { SelectionHighlightEngine } from "./highlighting/SelectionHighlightEngine";
 import { PDFRenderer } from "./rendering/PDFRenderer";
 import { generateId } from "./utils/helpers";
 
@@ -20,6 +22,8 @@ export class SalinaPDFViewer extends EventEmitter {
   private pdfRenderer: PDFRenderer;
   private simpleHighlighter: SimpleHighlighter;
   private searchEngine: SearchEngine;
+  private textLayerSearchEngine: TextLayerSearchEngine;
+  private selectionHighlightEngine: SelectionHighlightEngine;
   private plugins: Map<string, SalinaPDFPlugin> = new Map();
   private resizeObserver?: ResizeObserver;
 
@@ -42,6 +46,20 @@ export class SalinaPDFViewer extends EventEmitter {
         this.options.search.highlightColor || "rgba(255, 165, 0, 0.6)",
       caseSensitive: this.options.search.caseSensitive || false,
       wholeWords: this.options.search.wholeWords || false,
+    });
+    
+    // Initialize new PDF.js-style engines
+    this.textLayerSearchEngine = new TextLayerSearchEngine({
+      caseSensitive: this.options.search.caseSensitive || false,
+      wholeWords: this.options.search.wholeWords || false,
+      highlightAll: true,
+    });
+    
+    this.selectionHighlightEngine = new SelectionHighlightEngine({
+      defaultColor: this.options.highlighting.defaultColor || "yellow",
+      allowMultipleColors: true,
+      persistHighlights: true,
+      autoHighlight: this.options.highlighting.enableManualHighlighting || false,
     });
 
     // Setup
@@ -84,6 +102,8 @@ export class SalinaPDFViewer extends EventEmitter {
     this.pdfRenderer.destroy();
     this.simpleHighlighter.destroy();
     this.searchEngine.destroy();
+    this.textLayerSearchEngine.destroy();
+    this.selectionHighlightEngine.destroy();
     this.removeAllListeners();
     this.container.innerHTML = "";
   }
@@ -160,7 +180,7 @@ export class SalinaPDFViewer extends EventEmitter {
     this.setZoom(scale);
   }
 
-  // Search
+  // Search - Legacy method using coordinate-based highlighting
   search(query: string): SearchResult[] {
     if (!query.trim()) {
       this.clearSearch();
@@ -184,6 +204,26 @@ export class SalinaPDFViewer extends EventEmitter {
     return results;
   }
 
+  // Search using PDF.js-style text layer highlighting
+  searchInTextLayer(query: string): SearchResult[] {
+    if (!query.trim()) {
+      this.clearTextLayerSearch();
+      return [];
+    }
+    
+    this.setState({ searchQuery: query });
+    const results = this.textLayerSearchEngine.search(query);
+    
+    this.setState({
+      searchResults: results,
+      currentSearchIndex: results.length > 0 ? 0 : -1,
+    });
+    
+    this.emit("search:results", results);
+    this.options.callbacks.onSearch?.(results);
+    return results;
+  }
+
   clearSearch(): void {
     this.setState({
       searchQuery: "",
@@ -192,6 +232,17 @@ export class SalinaPDFViewer extends EventEmitter {
     });
 
     this.searchEngine.clearResults();
+    this.emit("search:cleared");
+  }
+
+  clearTextLayerSearch(): void {
+    this.setState({
+      searchQuery: "",
+      searchResults: [],
+      currentSearchIndex: -1,
+    });
+
+    this.textLayerSearchEngine.clear();
     this.emit("search:cleared");
   }
 
@@ -220,6 +271,19 @@ export class SalinaPDFViewer extends EventEmitter {
     this.goToPage(result.pageNumber);
   }
 
+  // Text layer search navigation
+  nextTextLayerSearchResult(): void {
+    this.textLayerSearchEngine.nextMatch();
+  }
+
+  prevTextLayerSearchResult(): void {
+    this.textLayerSearchEngine.previousMatch();
+  }
+
+  getCurrentSearchMatch(): { index: number; total: number } | null {
+    return this.textLayerSearchEngine.getCurrentMatch();
+  }
+
   // Simple highlighting methods
   getActiveHighlight(): ActiveHighlight | null {
     return this.simpleHighlighter.getActiveHighlight();
@@ -227,39 +291,77 @@ export class SalinaPDFViewer extends EventEmitter {
 
   clearHighlights(): void {
     this.simpleHighlighter.clearHighlights();
+    this.selectionHighlightEngine.clearHighlights();
     this.emit("highlight:cleared");
   }
 
+  // Manual highlighting methods using browser selection
+  createHighlightFromSelection(color?: string): boolean {
+    const highlight = this.selectionHighlightEngine.createHighlightFromCurrentSelection(color);
+    if (highlight) {
+      this.emit("highlight:created", highlight);
+      return true;
+    }
+    return false;
+  }
+
+  removeHighlight(highlightId: string): void {
+    this.selectionHighlightEngine.removeHighlight(highlightId);
+    this.emit("highlight:removed", highlightId);
+  }
+
+  updateHighlightColor(highlightId: string, color: string): void {
+    this.selectionHighlightEngine.updateHighlightColor(highlightId, color);
+    this.emit("highlight:updated", highlightId, color);
+  }
+
+  getHighlights() {
+    return this.selectionHighlightEngine.getHighlights();
+  }
+
+  getPageHighlights(pageNumber: number) {
+    return this.selectionHighlightEngine.getPageHighlights(pageNumber);
+  }
+
+  exportHighlights() {
+    return this.selectionHighlightEngine.exportHighlights();
+  }
+
+  importHighlights(highlights: any[]) {
+    this.selectionHighlightEngine.importHighlights(highlights);
+    this.emit("highlights:imported", highlights.length);
+  }
+
   // Legacy API methods for compatibility (simplified)
-  addHighlight(): void {
+  addSimpleHighlight(): void {
     // Note: Simple highlighter doesn't support programmatic highlight addition
     // This is for compatibility only
     console.warn(
-      "addHighlight: Simple highlighter only supports mouse-based highlighting"
+      "addSimpleHighlight: Simple highlighter only supports mouse-based highlighting"
     );
   }
 
-  removeHighlight(): boolean {
+  removeSimpleHighlight(): boolean {
     // Note: Simple highlighter doesn't support individual highlight removal
     // This clears all highlights for compatibility
     this.clearHighlights();
     return true;
   }
 
-  getHighlights(): ActiveHighlight[] {
+  getSimpleHighlights(): ActiveHighlight[] {
     const active = this.getActiveHighlight();
     return active ? [active] : [];
   }
 
-  exportHighlights(): string {
+  exportSimpleHighlights(): string {
     const active = this.getActiveHighlight();
     return JSON.stringify(active ? [active] : [], null, 2);
   }
 
-  importHighlights(): void {
+  importSimpleHighlights(): void {
     // Note: Simple highlighter doesn't support highlight importing
     console.warn(
-      "importHighlights: Simple highlighter doesn't support highlight importing"
+      "importSimpleHighlights: Simple highlighter doesn't support highlight importing"
     );
   }
 

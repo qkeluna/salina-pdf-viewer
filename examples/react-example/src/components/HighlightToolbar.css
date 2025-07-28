@@ -1,0 +1,251 @@
+.highlight-toolbar {
+  background: white;
+  border-bottom: 1px solid #ddd;
+  padding: 15px 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: center;
+}
+
+.highlight-toolbar h4 {
+  margin: 0;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.highlight-count {
+  background: #e9ecef;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  color: #495057;
+  font-weight: 500;
+}
+
+/* Color Picker Section */
+.color-picker-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f8f9fa;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+
+.color-picker-section label {
+  font-weight: 500;
+  color: #495057;
+  font-size: 14px;
+}
+
+.color-picker {
+  display: flex;
+  gap: 4px;
+}
+
+.color-button {
+  width: 28px;
+  height: 28px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: relative;
+}
+
+.color-button:hover:not(:disabled) {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.color-button.selected {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  transform: scale(1.05);
+}
+
+.color-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.color-button.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #333;
+  font-weight: bold;
+  font-size: 12px;
+  text-shadow: 0 0 2px rgba(255,255,255,0.8);
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.action-buttons button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.create-highlight-button {
+  background: #28a745;
+  color: white;
+}
+
+.create-highlight-button:hover:not(:disabled) {
+  background: #218838;
+  transform: translateY(-1px);
+}
+
+.toggle-manager-button {
+  background: #17a2b8;
+  color: white;
+}
+
+.toggle-manager-button:hover:not(:disabled) {
+  background: #138496;
+  transform: translateY(-1px);
+}
+
+.clear-all-button {
+  background: #dc3545;
+  color: white;
+}
+
+.clear-all-button:hover:not(:disabled) {
+  background: #c82333;
+  transform: translateY(-1px);
+}
+
+.action-buttons button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Import/Export Buttons */
+.io-buttons {
+  display: flex;
+  gap: 8px;
+  background: #f8f9fa;
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+
+.io-buttons button {
+  padding: 6px 12px;
+  border: 1px solid #ced4da;
+  background: white;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.export-button:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.import-button:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.io-buttons button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Instructions */
+.instructions {
+  flex: 1;
+  min-width: 300px;
+  background: #e8f4fd;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border-left: 4px solid #007bff;
+}
+
+.instructions small {
+  color: #495057;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.instructions strong {
+  color: #007bff;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .highlight-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+    padding: 15px;
+  }
+  
+  .toolbar-section {
+    justify-content: center;
+  }
+  
+  .color-picker-section {
+    justify-content: center;
+  }
+  
+  .action-buttons {
+    justify-content: center;
+  }
+  
+  .io-buttons {
+    justify-content: center;
+  }
+  
+  .instructions {
+    min-width: auto;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .action-buttons {
+    flex-direction: column;
+  }
+  
+  .action-buttons button {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .color-picker {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .color-button {
+    width: 32px;
+    height: 32px;
+  }
+}

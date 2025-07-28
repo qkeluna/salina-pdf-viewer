@@ -11,6 +11,62 @@ React components and hooks for the Salina PDF Viewer library.
 - 📱 **Responsive**: Mobile-friendly components
 - 🚀 **Performance**: Optimized for React applications
 
+## Troubleshooting
+
+### Common Issues
+
+#### Error: "Cannot read properties of undefined (reading 'current')"
+
+This error occurs when the `PDFViewerToolbar` component is used without a properly initialized `viewerRef`.
+
+**✅ Correct Usage:**
+
+```tsx
+import {
+  SalinaPDFViewer,
+  PDFViewerToolbar,
+} from "@salina-app/pdf-viewer-react";
+
+function MyPDFApp() {
+  const viewerRef = useRef<SalinaPDFViewerRef>(null);
+
+  return (
+    <>
+      <PDFViewerToolbar
+        viewerRef={viewerRef} // ← Required!
+        currentPage={1}
+        totalPages={10}
+        scale={1.0}
+      />
+      <SalinaPDFViewer
+        ref={viewerRef} // ← Connect the ref
+        file="/document.pdf"
+      />
+    </>
+  );
+}
+```
+
+**❌ Common Mistakes:**
+
+```tsx
+// Missing viewerRef prop
+<PDFViewerToolbar currentPage={1} totalPages={10} />;
+
+// Using undefined ref
+const viewerRef = null; // ← This will cause errors
+<PDFViewerToolbar viewerRef={viewerRef} />;
+```
+
+**🔧 Quick Fix:**
+If you're getting this error, make sure:
+
+1. You import and create a ref: `const viewerRef = useRef<SalinaPDFViewerRef>(null)`
+2. Pass it to both components: `viewerRef={viewerRef}`
+3. The `SalinaPDFViewer` component is mounted when using the toolbar
+
+---
+
 ## Installation
 
 ```bash

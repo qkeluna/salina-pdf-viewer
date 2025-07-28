@@ -269,6 +269,10 @@ var PDFViewerToolbar = ({
   const [searchQuery, setSearchQuery] = React2.useState("");
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    if (!viewerRef || !viewerRef.current) {
+      console.warn("PDFViewerToolbar: viewerRef is not available");
+      return;
+    }
     if (searchQuery.trim()) {
       viewerRef.current?.search(searchQuery.trim());
       onSearch?.(searchQuery.trim());
@@ -277,6 +281,10 @@ var PDFViewerToolbar = ({
     }
   };
   const handleExportHighlights = () => {
+    if (!viewerRef || !viewerRef.current) {
+      console.warn("PDFViewerToolbar: viewerRef is not available");
+      return;
+    }
     const data = viewerRef.current?.exportHighlights();
     if (data) {
       const blob = new Blob([data], { type: "application/json" });
@@ -294,6 +302,10 @@ var PDFViewerToolbar = ({
       const reader = new FileReader();
       reader.onload = () => {
         try {
+          if (!viewerRef || !viewerRef.current) {
+            console.warn("PDFViewerToolbar: viewerRef is not available");
+            return;
+          }
           viewerRef.current?.importHighlights();
           console.warn(
             "Import highlights not supported in simple highlighter mode"
@@ -324,7 +336,11 @@ var PDFViewerToolbar = ({
           /* @__PURE__ */ jsx2(
             "button",
             {
-              onClick: () => viewerRef.current?.prevPage(),
+              onClick: () => {
+                if (viewerRef && viewerRef.current) {
+                  viewerRef.current?.prevPage();
+                }
+              },
               disabled: currentPage <= 1,
               style: {
                 padding: "0.25rem 0.5rem",
@@ -351,7 +367,11 @@ var PDFViewerToolbar = ({
           /* @__PURE__ */ jsx2(
             "button",
             {
-              onClick: () => viewerRef.current?.nextPage(),
+              onClick: () => {
+                if (viewerRef && viewerRef.current) {
+                  viewerRef.current?.nextPage();
+                }
+              },
               disabled: currentPage >= totalPages,
               style: {
                 padding: "0.25rem 0.5rem",
@@ -369,7 +389,11 @@ var PDFViewerToolbar = ({
           /* @__PURE__ */ jsx2(
             "button",
             {
-              onClick: () => viewerRef.current?.zoomOut(),
+              onClick: () => {
+                if (viewerRef && viewerRef.current) {
+                  viewerRef.current?.zoomOut();
+                }
+              },
               style: {
                 padding: "0.25rem 0.5rem",
                 border: "1px solid #ccc",
@@ -393,7 +417,11 @@ var PDFViewerToolbar = ({
           /* @__PURE__ */ jsx2(
             "button",
             {
-              onClick: () => viewerRef.current?.zoomIn(),
+              onClick: () => {
+                if (viewerRef && viewerRef.current) {
+                  viewerRef.current?.zoomIn();
+                }
+              },
               style: {
                 padding: "0.25rem 0.5rem",
                 border: "1px solid #ccc",
@@ -407,7 +435,11 @@ var PDFViewerToolbar = ({
           /* @__PURE__ */ jsx2(
             "button",
             {
-              onClick: () => viewerRef.current?.fitToWidth(),
+              onClick: () => {
+                if (viewerRef && viewerRef.current) {
+                  viewerRef.current?.fitToWidth();
+                }
+              },
               style: {
                 padding: "0.25rem 0.5rem",
                 border: "1px solid #ccc",
@@ -460,7 +492,11 @@ var PDFViewerToolbar = ({
                   "button",
                   {
                     type: "button",
-                    onClick: () => viewerRef.current?.prevSearchResult(),
+                    onClick: () => {
+                      if (viewerRef && viewerRef.current) {
+                        viewerRef.current?.prevSearchResult();
+                      }
+                    },
                     style: {
                       padding: "0.25rem 0.5rem",
                       border: "1px solid #ccc",
@@ -480,7 +516,11 @@ var PDFViewerToolbar = ({
                   "button",
                   {
                     type: "button",
-                    onClick: () => viewerRef.current?.nextSearchResult(),
+                    onClick: () => {
+                      if (viewerRef && viewerRef.current) {
+                        viewerRef.current?.nextSearchResult();
+                      }
+                    },
                     style: {
                       padding: "0.25rem 0.5rem",
                       border: "1px solid #ccc",
@@ -555,7 +595,11 @@ var PDFViewerToolbar = ({
           /* @__PURE__ */ jsx2(
             "button",
             {
-              onClick: () => viewerRef.current?.clearHighlights(),
+              onClick: () => {
+                if (viewerRef && viewerRef.current) {
+                  viewerRef.current?.clearHighlights();
+                }
+              },
               disabled: highlightCount === 0,
               style: {
                 padding: "0.25rem 0.5rem",

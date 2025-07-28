@@ -30,6 +30,11 @@ export const PDFViewerToolbar: React.FC<PDFViewerToolbarProps> = ({
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!viewerRef || !viewerRef.current) {
+      console.warn("PDFViewerToolbar: viewerRef is not available");
+      return;
+    }
+
     if (searchQuery.trim()) {
       viewerRef.current?.search(searchQuery.trim());
       onSearch?.(searchQuery.trim());
@@ -39,6 +44,11 @@ export const PDFViewerToolbar: React.FC<PDFViewerToolbarProps> = ({
   };
 
   const handleExportHighlights = () => {
+    if (!viewerRef || !viewerRef.current) {
+      console.warn("PDFViewerToolbar: viewerRef is not available");
+      return;
+    }
+
     const data = viewerRef.current?.exportHighlights();
     if (data) {
       const blob = new Blob([data], { type: "application/json" });
@@ -57,6 +67,10 @@ export const PDFViewerToolbar: React.FC<PDFViewerToolbarProps> = ({
       const reader = new FileReader();
       reader.onload = () => {
         try {
+          if (!viewerRef || !viewerRef.current) {
+            console.warn("PDFViewerToolbar: viewerRef is not available");
+            return;
+          }
           // Note: Simple highlighter doesn't support importing highlights
           viewerRef.current?.importHighlights();
           console.warn(
@@ -87,7 +101,11 @@ export const PDFViewerToolbar: React.FC<PDFViewerToolbarProps> = ({
       {/* Page Navigation */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
         <button
-          onClick={() => viewerRef.current?.prevPage()}
+          onClick={() => {
+            if (viewerRef && viewerRef.current) {
+              viewerRef.current?.prevPage();
+            }
+          }}
           disabled={currentPage <= 1}
           style={{
             padding: "0.25rem 0.5rem",
@@ -108,7 +126,11 @@ export const PDFViewerToolbar: React.FC<PDFViewerToolbarProps> = ({
         </span>
 
         <button
-          onClick={() => viewerRef.current?.nextPage()}
+          onClick={() => {
+            if (viewerRef && viewerRef.current) {
+              viewerRef.current?.nextPage();
+            }
+          }}
           disabled={currentPage >= totalPages}
           style={{
             padding: "0.25rem 0.5rem",
@@ -126,7 +148,11 @@ export const PDFViewerToolbar: React.FC<PDFViewerToolbarProps> = ({
       {/* Zoom Controls */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
         <button
-          onClick={() => viewerRef.current?.zoomOut()}
+          onClick={() => {
+            if (viewerRef && viewerRef.current) {
+              viewerRef.current?.zoomOut();
+            }
+          }}
           style={{
             padding: "0.25rem 0.5rem",
             border: "1px solid #ccc",
@@ -145,7 +171,11 @@ export const PDFViewerToolbar: React.FC<PDFViewerToolbarProps> = ({
         </span>
 
         <button
-          onClick={() => viewerRef.current?.zoomIn()}
+          onClick={() => {
+            if (viewerRef && viewerRef.current) {
+              viewerRef.current?.zoomIn();
+            }
+          }}
           style={{
             padding: "0.25rem 0.5rem",
             border: "1px solid #ccc",
@@ -158,7 +188,11 @@ export const PDFViewerToolbar: React.FC<PDFViewerToolbarProps> = ({
         </button>
 
         <button
-          onClick={() => viewerRef.current?.fitToWidth()}
+          onClick={() => {
+            if (viewerRef && viewerRef.current) {
+              viewerRef.current?.fitToWidth();
+            }
+          }}
           style={{
             padding: "0.25rem 0.5rem",
             border: "1px solid #ccc",
@@ -207,7 +241,11 @@ export const PDFViewerToolbar: React.FC<PDFViewerToolbarProps> = ({
           <>
             <button
               type="button"
-              onClick={() => viewerRef.current?.prevSearchResult()}
+              onClick={() => {
+                if (viewerRef && viewerRef.current) {
+                  viewerRef.current?.prevSearchResult();
+                }
+              }}
               style={{
                 padding: "0.25rem 0.5rem",
                 border: "1px solid #ccc",
@@ -225,7 +263,11 @@ export const PDFViewerToolbar: React.FC<PDFViewerToolbarProps> = ({
 
             <button
               type="button"
-              onClick={() => viewerRef.current?.nextSearchResult()}
+              onClick={() => {
+                if (viewerRef && viewerRef.current) {
+                  viewerRef.current?.nextSearchResult();
+                }
+              }}
               style={{
                 padding: "0.25rem 0.5rem",
                 border: "1px solid #ccc",
@@ -290,7 +332,11 @@ export const PDFViewerToolbar: React.FC<PDFViewerToolbarProps> = ({
         </label>
 
         <button
-          onClick={() => viewerRef.current?.clearHighlights()}
+          onClick={() => {
+            if (viewerRef && viewerRef.current) {
+              viewerRef.current?.clearHighlights();
+            }
+          }}
           disabled={highlightCount === 0}
           style={{
             padding: "0.25rem 0.5rem",

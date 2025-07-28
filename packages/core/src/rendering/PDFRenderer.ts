@@ -70,6 +70,15 @@ export class PDFRenderer {
 
   async loadDocument(file: File | string | ArrayBuffer): Promise<number> {
     try {
+      // Cancel any existing rendering
+      if (this.pdfDocument) {
+        try {
+          this.pdfDocument.destroy()
+        } catch (error) {
+          console.warn('PDFRenderer: Error destroying previous document:', error)
+        }
+      }
+      
       // Ensure PDF.js is loaded
       const pdfjs = await loadPDFJS()
       
@@ -97,6 +106,11 @@ export class PDFRenderer {
       return this.pdfDocument.numPages
       
     } catch (error) {
+      // Handle specific PDF.js errors
+      if (error.name === 'RenderingCancelledException') {
+        console.warn('PDFRenderer: Rendering was cancelled (expected during cleanup)')
+        throw new Error('PDF rendering was cancelled')
+      }
       throw new Error(`Failed to load PDF: ${error}`)
     }
   }
@@ -153,12 +167,21 @@ export class PDFRenderer {
     
     pageContainer.appendChild(canvas)
     
-    // Render PDF page
-    const renderTask = page.render({
-      canvasContext: context,
-      viewport: viewport
-    })
-    await renderTask.promise
+    // Render PDF page with cancellation handling
+    try {
+      const renderTask = page.render({
+        canvasContext: context,
+        viewport: viewport
+      })
+      await renderTask.promise
+    } catch (error) {
+      if (error.name === 'RenderingCancelledException') {
+        console.warn(`PDFRenderer: Rendering cancelled for page ${pageNumber}`)
+        // Return empty container for cancelled renders
+        return pageContainer
+      }
+      throw error
+    }
     
     // Create text layer if enabled
     let textLayer: HTMLElement | null = null
@@ -188,6 +211,7 @@ export class PDFRenderer {
     
     const textLayer = document.createElement('div')
     textLayer.className = 'salina-pdf-text-layer'
+    textLayer.dataset.pageNumber = container.dataset.pageNumber || '1'
     textLayer.style.cssText = `
       position: absolute;
       top: 0;
@@ -334,11 +358,24 @@ export class PDFRenderer {
   }
 
   destroy(): void {
-    if (this.pdfDocument) {
-      this.pdfDocument.destroy()
+    try {
+      // Clear container first to prevent DOM conflicts
+      if (this.container) {
+        this.container.innerHTML = ''
+      }
+      
+      // Destroy PDF document
+      if (this.pdfDocument) {
+        this.pdfDocument.destroy()
+        this.pdfDocument = null
+      }
+      
+      // Clear internal data
+      this.pages.clear()
+      this.textContent = []
+    } catch (error) {
+      console.warn('PDFRenderer: Error during destruction:', error)
     }
-    this.pages.clear()
-    this.textContent = []
   }
 
   private async extractTextContent(): Promise<void> {

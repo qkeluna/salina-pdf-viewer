@@ -52,6 +52,7 @@ export interface SalinaPDFViewerOptions {
     defaultColor?: string;
     allowMultipleColors?: boolean;
     persistHighlights?: boolean;
+    enableManualHighlighting?: boolean;
   };
   search?: {
     highlightColor?: string;

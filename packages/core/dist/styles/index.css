@@ -136,11 +136,49 @@
   border-radius: 2px;
   z-index: 15;
   transition: all 0.2s ease;
+  mix-blend-mode: multiply;
 }
 .salina-search-highlight.current {
-  background-color: rgba(255, 0, 0, 0.6);
+  background-color: rgba(255, 0, 0, 0.7);
   box-shadow: 0 0 4px rgba(255, 0, 0, 0.8);
   animation: pulse 1s infinite;
+  mix-blend-mode: multiply;
+}
+.salina-highlight {
+  background-color: rgba(255, 255, 0, 0.3);
+  border-radius: 2px;
+  mix-blend-mode: multiply;
+}
+.salina-highlight-selected {
+  background-color: rgba(255, 165, 0, 0.5);
+  outline: 1px solid rgba(255, 165, 0, 0.8);
+}
+.salina-persistent-highlight {
+  background-color: rgba(255, 255, 0, 0.3);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+  mix-blend-mode: multiply;
+}
+.salina-persistent-highlight:hover,
+.salina-highlight-hover {
+  opacity: 0.6 !important;
+  outline: 1px solid rgba(0, 0, 0, 0.2);
+}
+.salina-persistent-highlight[data-color=yellow] {
+  background-color: rgba(255, 255, 0, 0.3);
+}
+.salina-persistent-highlight[data-color=green] {
+  background-color: rgba(0, 255, 0, 0.3);
+}
+.salina-persistent-highlight[data-color=blue] {
+  background-color: rgba(0, 255, 255, 0.3);
+}
+.salina-persistent-highlight[data-color=pink] {
+  background-color: rgba(255, 192, 203, 0.3);
+}
+.salina-persistent-highlight[data-color=orange] {
+  background-color: rgba(255, 165, 0, 0.3);
 }
 @keyframes pulse {
   0% {

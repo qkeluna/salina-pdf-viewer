@@ -52,6 +52,7 @@ interface SalinaPDFViewerOptions {
         defaultColor?: string;
         allowMultipleColors?: boolean;
         persistHighlights?: boolean;
+        enableManualHighlighting?: boolean;
     };
     search?: {
         highlightColor?: string;
@@ -112,6 +113,94 @@ interface EventMap {
     "highlight:cleared": [];
 }
 
+interface SelectionHighlight extends Highlight {
+    serializedRange?: string;
+    rects: DOMRect[];
+}
+interface SelectionHighlightOptions {
+    defaultColor: string;
+    allowMultipleColors: boolean;
+    persistHighlights: boolean;
+    autoHighlight: boolean;
+}
+/**
+ * Enhanced highlight engine that uses native browser selection and text layer
+ * for pixel-perfect highlighting across zoom levels
+ */
+declare class SelectionHighlightEngine {
+    private highlighter;
+    private highlights;
+    private options;
+    private selectionHandler;
+    constructor(options?: Partial<SelectionHighlightOptions>);
+    private setupSelectionHandling;
+    /**
+     * Create highlight from current browser selection
+     */
+    createHighlightFromCurrentSelection(color?: string): SelectionHighlight | null;
+    /**
+     * Convert DOMRects to position relative to page
+     */
+    private rectsToPosition;
+    /**
+     * Serialize a range for persistence
+     */
+    private serializeRange;
+    /**
+     * Get path to a node for serialization
+     */
+    private getNodePath;
+    /**
+     * Restore highlights from serialized data
+     */
+    restoreHighlights(highlights: SelectionHighlight[]): void;
+    /**
+     * Deserialize a range
+     */
+    private deserializeRange;
+    /**
+     * Get node from path
+     */
+    private getNodeFromPath;
+    /**
+     * Add interaction handlers to highlight
+     */
+    private addHighlightInteraction;
+    /**
+     * Remove highlight
+     */
+    removeHighlight(highlightId: string): void;
+    /**
+     * Update highlight color
+     */
+    updateHighlightColor(highlightId: string, color: string): void;
+    /**
+     * Get all highlights
+     */
+    getHighlights(): SelectionHighlight[];
+    /**
+     * Get highlights for a specific page
+     */
+    getPageHighlights(pageNumber: number): SelectionHighlight[];
+    /**
+     * Clear all highlights
+     */
+    clearHighlights(): void;
+    /**
+     * Emit highlight events
+     */
+    private emitHighlightEvent;
+    /**
+     * Export highlights for persistence
+     */
+    exportHighlights(): SelectionHighlight[];
+    /**
+     * Import highlights
+     */
+    importHighlights(highlights: SelectionHighlight[]): void;
+    destroy(): void;
+}
+
 interface SimpleHighlighterOptions {
     highlightColor: string;
     copyHintEnabled: boolean;
@@ -159,6 +248,8 @@ declare class SalinaPDFViewer extends EventEmitter {
     private pdfRenderer;
     private simpleHighlighter;
     private searchEngine;
+    private textLayerSearchEngine;
+    private selectionHighlightEngine;
     private plugins;
     private resizeObserver?;
     constructor(options: SalinaPDFViewerOptions);
@@ -173,16 +264,31 @@ declare class SalinaPDFViewer extends EventEmitter {
     fitToWidth(): void;
     fitToHeight(): void;
     search(query: string): SearchResult[];
+    searchInTextLayer(query: string): SearchResult[];
     clearSearch(): void;
+    clearTextLayerSearch(): void;
     nextSearchResult(): void;
     prevSearchResult(): void;
+    nextTextLayerSearchResult(): void;
+    prevTextLayerSearchResult(): void;
+    getCurrentSearchMatch(): {
+        index: number;
+        total: number;
+    } | null;
     getActiveHighlight(): ActiveHighlight | null;
     clearHighlights(): void;
-    addHighlight(): void;
-    removeHighlight(): boolean;
-    getHighlights(): ActiveHighlight[];
-    exportHighlights(): string;
-    importHighlights(): void;
+    createHighlightFromSelection(color?: string): boolean;
+    removeHighlight(highlightId: string): void;
+    updateHighlightColor(highlightId: string, color: string): void;
+    getHighlights(): SelectionHighlight[];
+    getPageHighlights(pageNumber: number): SelectionHighlight[];
+    exportHighlights(): SelectionHighlight[];
+    importHighlights(highlights: any[]): void;
+    addSimpleHighlight(): void;
+    removeSimpleHighlight(): boolean;
+    getSimpleHighlights(): ActiveHighlight[];
+    exportSimpleHighlights(): string;
+    importSimpleHighlights(): void;
     use(plugin: SalinaPDFPlugin): void;
     unuse(pluginName: string): void;
     getCurrentPage(): number;
@@ -198,6 +304,108 @@ declare class SalinaPDFViewer extends EventEmitter {
     private setupContainer;
     private setupEventListeners;
     private setupResizeObserver;
+}
+
+interface HighlightOptions {
+    defaultColor: string;
+    allowMultipleColors: boolean;
+    persistHighlights: boolean;
+}
+declare class HighlightEngine {
+    private highlights;
+    private highlightElements;
+    private scale;
+    private options;
+    constructor(options: HighlightOptions);
+    addHighlight(highlight: Highlight): void;
+    removeHighlight(id: string): void;
+    clearHighlights(): void;
+    updateScale(scale: number): void;
+    getHighlights(): Highlight[];
+    getHighlightById(id: string): Highlight | undefined;
+    destroy(): void;
+    /**
+     * Handle viewport changes (scroll, resize) to maintain highlight accuracy
+     */
+    handleViewportChange(): void;
+    /**
+     * Optimize highlight rendering by only updating visible highlights
+     */
+    updateVisibleHighlights(): void;
+    /**
+     * Get comprehensive positioning information for a page
+     */
+    private getPositionInfo;
+    /**
+     * Calculate accurate highlight position with proper coordinate transformation
+     */
+    private renderHighlight;
+    /**
+     * Create highlight from text selection with accurate coordinate calculation
+     */
+    createHighlightFromSelection(selection: Selection, pageNumber: number, color?: string): Highlight[] | null;
+    private generateHighlightId;
+    private handleHighlightClick;
+}
+
+interface TextLayerMatch {
+    pageIndex: number;
+    matchIndex: number;
+    textDivs: HTMLElement[];
+    textContent: string;
+    begin: {
+        divIdx: number;
+        offset: number;
+    };
+    end: {
+        divIdx: number;
+        offset: number;
+    };
+}
+/**
+ * PDF.js-style text layer highlighter that works with native browser selection
+ * and text layer spans for pixel-perfect highlighting
+ */
+declare class TextLayerHighlighter {
+    private matches;
+    private selectedMatchIndex;
+    private highlightClassName;
+    private selectedClassName;
+    /**
+     * Find all text matches in a text layer using PDF.js approach
+     */
+    findTextInLayer(textLayer: HTMLElement, query: string, caseSensitive?: boolean): TextLayerMatch[];
+    /**
+     * Highlight matches using PDF.js approach with wrapped text nodes
+     */
+    highlightMatches(matches: TextLayerMatch[], highlightAll?: boolean): void;
+    private highlightPageMatches;
+    private highlightMatch;
+    private highlightTextRange;
+    /**
+     * Clear all highlights from text layers
+     */
+    clearHighlights(): void;
+    /**
+     * Navigate to specific match
+     */
+    navigateToMatch(matchIndex: number): void;
+    /**
+     * Get selection from text layer for manual highlighting
+     */
+    getSelectionInfo(selection: Selection): {
+        text: string;
+        range: Range;
+        rects: DOMRect[];
+    } | null;
+    /**
+     * Create persistent highlight from selection
+     */
+    createHighlightFromSelection(selection: Selection, color?: string, id?: string): string | null;
+    /**
+     * Remove persistent highlight by ID
+     */
+    removeHighlight(highlightId: string): void;
 }
 
 interface SearchOptions {
@@ -231,6 +439,52 @@ declare class SearchEngine {
     private getContext;
     private escapeRegExp;
     highlightSearchResult(index: number): void;
+}
+
+interface TextLayerSearchOptions {
+    caseSensitive: boolean;
+    wholeWords: boolean;
+    highlightAll: boolean;
+}
+/**
+ * Enhanced search engine that uses PDF.js text layer for accurate highlighting
+ */
+declare class TextLayerSearchEngine {
+    private highlighter;
+    private currentQuery;
+    private currentMatchIndex;
+    private matches;
+    private options;
+    constructor(options?: Partial<TextLayerSearchOptions>);
+    /**
+     * Search across all text layers
+     */
+    search(query: string): SearchResult[];
+    private searchInTextLayer;
+    private isWholeWordMatch;
+    private getMatchBounds;
+    private getMatchContext;
+    /**
+     * Navigate to next/previous match
+     */
+    nextMatch(): void;
+    previousMatch(): void;
+    /**
+     * Clear search results and highlights
+     */
+    clear(): void;
+    /**
+     * Update search options
+     */
+    setOptions(options: Partial<TextLayerSearchOptions>): void;
+    /**
+     * Get current match information
+     */
+    getCurrentMatch(): {
+        index: number;
+        total: number;
+    } | null;
+    destroy(): void;
 }
 
 declare class PDFRenderer {
@@ -417,4 +671,4 @@ declare class VirtualScrolling {
 
 declare const VERSION = "3.0.2";
 
-export { type ActiveHighlight, type EventMap, type Highlight, MemoryManager, type PDFPage, PDFRenderer, PerformanceOptimizer, type SalinaPDFPlugin, SalinaPDFViewer, type SalinaPDFViewerOptions, SearchEngine, type SearchResult, SimpleHighlighter, VERSION, type ViewerState, VirtualScrolling, clamp, debounce, deepMerge, delay, downloadBlob, downloadData, formatFileSize, generateId, getRangeRect, isBrowser, isInViewport, isTouchDevice, loadFile, retry, throttle };
+export { type ActiveHighlight, type EventMap, type Highlight, HighlightEngine, type HighlightOptions, MemoryManager, type PDFPage, PDFRenderer, PerformanceOptimizer, type SalinaPDFPlugin, SalinaPDFViewer, type SalinaPDFViewerOptions, SearchEngine, type SearchOptions, type SearchResult, type SelectionHighlight, SelectionHighlightEngine, type SelectionHighlightOptions, SimpleHighlighter, type TextContent, TextLayerHighlighter, type TextLayerMatch, TextLayerSearchEngine, type TextLayerSearchOptions, VERSION, type ViewerState, VirtualScrolling, clamp, debounce, deepMerge, delay, downloadBlob, downloadData, formatFileSize, generateId, getRangeRect, isBrowser, isInViewport, isTouchDevice, loadFile, retry, throttle };

@@ -268,6 +268,38 @@ var SimpleHighlighter = class {
 };
 
 // src/search/SearchEngine.ts
+var MAX_REGEX_LENGTH = 100;
+var DANGEROUS_REGEX_PATTERNS = [
+  /(\.\*){2,}/,
+  // Multiple .* patterns
+  /(\+\*)|(\*\+)/,
+  // Catastrophic backtracking patterns
+  /(.*){2,}/,
+  // Nested quantifiers
+  /(\(.+\+){2,}/
+  // Nested groups with quantifiers
+];
+function validateSearchQuery(query) {
+  if (query.length > MAX_REGEX_LENGTH) {
+    return false;
+  }
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const testPattern = `\\b${escapedQuery}\\b`;
+  return !DANGEROUS_REGEX_PATTERNS.some((pattern) => pattern.test(testPattern));
+}
+function createSafeRegex(searchQuery) {
+  try {
+    if (!validateSearchQuery(searchQuery)) {
+      console.warn("Search query rejected for security reasons");
+      return null;
+    }
+    const escapedQuery = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\b${escapedQuery}\\b`, "g");
+  } catch (error) {
+    console.warn("Invalid regex pattern:", error);
+    return null;
+  }
+}
 var SearchEngine = class {
   constructor(options) {
     this.searchResults = [];
@@ -280,16 +312,21 @@ var SearchEngine = class {
     const results = [];
     let globalIndex = 0;
     const searchQuery = this.options.caseSensitive ? query : query.toLowerCase();
-    const regex = this.options.wholeWords ? new RegExp(`\\b${this.escapeRegExp(searchQuery)}\\b`, "g") : null;
+    const regex = this.options.wholeWords ? createSafeRegex(searchQuery) : null;
+    if (this.options.wholeWords && !regex) {
+      console.warn(
+        "Falling back to simple search due to invalid regex pattern"
+      );
+    }
     textContent.forEach((pageContent) => {
       pageContent.items.forEach((item) => {
         if (!item.str.trim()) return;
         const text = this.options.caseSensitive ? item.str : item.str.toLowerCase();
         const indices = this.findMatchIndices(text, searchQuery, regex);
-        indices.forEach((index) => {
+        indices.forEach(({ index, length }) => {
           results.push({
             pageNumber: pageContent.pageNumber,
-            text: item.str.substr(index, query.length),
+            text: item.str.substr(index, length),
             position: {
               x: item.x,
               y: item.y,
@@ -297,7 +334,7 @@ var SearchEngine = class {
               height: item.height
             },
             textIndex: globalIndex,
-            context: this.getContext(item.str, index, query.length)
+            context: this.getContext(item.str, index, length)
           });
           globalIndex++;
         });
@@ -308,21 +345,30 @@ var SearchEngine = class {
     return results;
   }
   findMatchIndices(text, searchQuery, regex) {
-    const indices = [];
+    const matches = [];
     if (regex) {
       regex.lastIndex = 0;
       let match;
-      while ((match = regex.exec(text)) !== null) {
-        indices.push(match.index);
+      let iterationCount = 0;
+      const maxIterations = 1e4;
+      while ((match = regex.exec(text)) !== null && iterationCount < maxIterations) {
+        matches.push({ index: match.index, length: match[0].length });
+        iterationCount++;
+        if (match.index === regex.lastIndex) {
+          regex.lastIndex++;
+        }
       }
     } else {
       let index = text.indexOf(searchQuery);
-      while (index !== -1) {
-        indices.push(index);
+      let iterationCount = 0;
+      const maxIterations = 1e4;
+      while (index !== -1 && iterationCount < maxIterations) {
+        matches.push({ index, length: searchQuery.length });
         index = text.indexOf(searchQuery, index + 1);
+        iterationCount++;
       }
     }
-    return indices;
+    return matches;
   }
   clearResults() {
     this.searchResults = [];
@@ -355,7 +401,10 @@ var SearchEngine = class {
     results.forEach((result) => {
       const highlightElement = document.createElement("div");
       highlightElement.className = "salina-search-highlight";
-      highlightElement.setAttribute("data-search-index", result.originalIndex.toString());
+      highlightElement.setAttribute(
+        "data-search-index",
+        result.originalIndex.toString()
+      );
       highlightElement.style.cssText = `
         position: absolute;
         left: ${result.position.x}px;
@@ -366,6 +415,7 @@ var SearchEngine = class {
         pointer-events: none;
         border-radius: 2px;
         z-index: 15;
+        mix-blend-mode: multiply;
       `;
       fragment.appendChild(highlightElement);
       this.searchElements.push(highlightElement);
@@ -395,6 +445,661 @@ var SearchEngine = class {
       element.classList.add("current");
       element.scrollIntoView({ behavior: "smooth", block: "center" });
     }
+  }
+};
+
+// src/highlighting/TextLayerHighlighter.ts
+var TextLayerHighlighter = class {
+  constructor() {
+    this.matches = /* @__PURE__ */ new Map();
+    this.selectedMatchIndex = -1;
+    this.highlightClassName = "salina-highlight";
+    this.selectedClassName = "salina-highlight-selected";
+  }
+  /**
+   * Find all text matches in a text layer using PDF.js approach
+   */
+  findTextInLayer(textLayer, query, caseSensitive = false) {
+    const textDivs = Array.from(textLayer.querySelectorAll("span"));
+    const matches = [];
+    if (!textDivs.length || !query) return matches;
+    const pageText = textDivs.map((div) => div.textContent || "").join("");
+    const searchQuery = caseSensitive ? query : query.toLowerCase();
+    const searchText = caseSensitive ? pageText : pageText.toLowerCase();
+    let matchIndex = 0;
+    let searchIndex = 0;
+    while ((searchIndex = searchText.indexOf(searchQuery, searchIndex)) !== -1) {
+      const matchEnd = searchIndex + searchQuery.length;
+      let charCount = 0;
+      let beginDiv = -1;
+      let beginOffset = -1;
+      let endDiv = -1;
+      let endOffset = -1;
+      for (let divIdx = 0; divIdx < textDivs.length; divIdx++) {
+        const divText = textDivs[divIdx].textContent || "";
+        const divLength = divText.length;
+        if (beginDiv === -1 && charCount + divLength > searchIndex) {
+          beginDiv = divIdx;
+          beginOffset = searchIndex - charCount;
+        }
+        if (charCount < matchEnd && charCount + divLength >= matchEnd) {
+          endDiv = divIdx;
+          endOffset = matchEnd - charCount;
+          break;
+        }
+        charCount += divLength;
+      }
+      if (beginDiv !== -1 && endDiv !== -1) {
+        const matchDivs = textDivs.slice(beginDiv, endDiv + 1);
+        matches.push({
+          pageIndex: parseInt(textLayer.dataset.pageNumber || "0"),
+          matchIndex: matchIndex++,
+          textDivs: matchDivs,
+          textContent: pageText.substring(searchIndex, matchEnd),
+          begin: { divIdx: beginDiv, offset: beginOffset },
+          end: { divIdx: endDiv, offset: endOffset }
+        });
+      }
+      searchIndex = matchEnd;
+    }
+    return matches;
+  }
+  /**
+   * Highlight matches using PDF.js approach with wrapped text nodes
+   */
+  highlightMatches(matches, highlightAll = true) {
+    const pageMatches = /* @__PURE__ */ new Map();
+    matches.forEach((match) => {
+      if (!pageMatches.has(match.pageIndex)) {
+        pageMatches.set(match.pageIndex, []);
+      }
+      pageMatches.get(match.pageIndex).push(match);
+    });
+    pageMatches.forEach((pageMatchList, pageIndex) => {
+      this.highlightPageMatches(pageMatchList, highlightAll);
+    });
+  }
+  highlightPageMatches(matches, highlightAll) {
+    matches.sort((a, b) => {
+      if (a.begin.divIdx !== b.begin.divIdx) {
+        return a.begin.divIdx - b.begin.divIdx;
+      }
+      return a.begin.offset - b.begin.offset;
+    });
+    matches.forEach((match, index) => {
+      this.highlightMatch(match, highlightAll || index === this.selectedMatchIndex);
+    });
+  }
+  highlightMatch(match, isSelected = false) {
+    const { begin, end, textDivs } = match;
+    if (begin.divIdx === end.divIdx) {
+      this.highlightTextRange(
+        textDivs[0],
+        begin.offset,
+        end.offset,
+        isSelected
+      );
+    } else {
+      for (let i = 0; i < textDivs.length; i++) {
+        const div = textDivs[i];
+        if (i === 0) {
+          this.highlightTextRange(
+            div,
+            begin.offset,
+            div.textContent.length,
+            isSelected
+          );
+        } else if (i === textDivs.length - 1) {
+          this.highlightTextRange(div, 0, end.offset, isSelected);
+        } else {
+          this.highlightTextRange(div, 0, div.textContent.length, isSelected);
+        }
+      }
+    }
+  }
+  highlightTextRange(element, start, end, isSelected) {
+    const text = element.textContent || "";
+    if (start >= end || start < 0 || end > text.length) return;
+    const textNode = element.firstChild;
+    if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return;
+    const highlightSpan = document.createElement("span");
+    highlightSpan.className = this.highlightClassName;
+    if (isSelected) {
+      highlightSpan.classList.add(this.selectedClassName);
+    }
+    if (start > 0) {
+      textNode.splitText(start);
+    }
+    const highlightedNode = textNode.nextSibling || textNode;
+    if (end < text.length) {
+      highlightedNode.splitText(end - start);
+    }
+    const highlightedText = highlightedNode.cloneNode(true);
+    highlightSpan.appendChild(highlightedText);
+    highlightedNode.parentNode.replaceChild(highlightSpan, highlightedNode);
+  }
+  /**
+   * Clear all highlights from text layers
+   */
+  clearHighlights() {
+    const highlights = document.querySelectorAll(`.${this.highlightClassName}`);
+    highlights.forEach((highlight) => {
+      const parent = highlight.parentNode;
+      if (!parent) return;
+      const text = highlight.textContent || "";
+      const textNode = document.createTextNode(text);
+      parent.replaceChild(textNode, highlight);
+      parent.normalize();
+    });
+    this.matches.clear();
+    this.selectedMatchIndex = -1;
+  }
+  /**
+   * Navigate to specific match
+   */
+  navigateToMatch(matchIndex) {
+    const allMatches = Array.from(this.matches.values()).flat();
+    if (matchIndex < 0 || matchIndex >= allMatches.length) return;
+    document.querySelectorAll(`.${this.selectedClassName}`).forEach((el) => {
+      el.classList.remove(this.selectedClassName);
+    });
+    this.selectedMatchIndex = matchIndex;
+    const match = allMatches[matchIndex];
+    this.highlightMatch(match, true);
+    const firstDiv = match.textDivs[0];
+    firstDiv.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  /**
+   * Get selection from text layer for manual highlighting
+   */
+  getSelectionInfo(selection) {
+    if (!selection.rangeCount) return null;
+    const range = selection.getRangeAt(0);
+    const text = selection.toString().trim();
+    if (!text) return null;
+    const rects = Array.from(range.getClientRects());
+    return {
+      text,
+      range,
+      rects
+    };
+  }
+  /**
+   * Create persistent highlight from selection
+   */
+  createHighlightFromSelection(selection, color = "yellow", id) {
+    const selectionInfo = this.getSelectionInfo(selection);
+    if (!selectionInfo) return null;
+    const { range } = selectionInfo;
+    const highlightId = id || `highlight_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const highlightSpan = document.createElement("span");
+    highlightSpan.className = "salina-persistent-highlight";
+    highlightSpan.dataset.highlightId = highlightId;
+    highlightSpan.style.backgroundColor = color;
+    highlightSpan.style.opacity = "0.3";
+    highlightSpan.style.cursor = "pointer";
+    try {
+      range.surroundContents(highlightSpan);
+    } catch (e) {
+      const contents = range.extractContents();
+      highlightSpan.appendChild(contents);
+      range.insertNode(highlightSpan);
+    }
+    selection.removeAllRanges();
+    return highlightId;
+  }
+  /**
+   * Remove persistent highlight by ID
+   */
+  removeHighlight(highlightId) {
+    const highlight = document.querySelector(`[data-highlight-id="${highlightId}"]`);
+    if (!highlight) return;
+    const parent = highlight.parentNode;
+    if (!parent) return;
+    while (highlight.firstChild) {
+      parent.insertBefore(highlight.firstChild, highlight);
+    }
+    highlight.remove();
+    parent.normalize();
+  }
+};
+
+// src/search/TextLayerSearchEngine.ts
+var TextLayerSearchEngine = class {
+  constructor(options = {}) {
+    this.currentQuery = "";
+    this.currentMatchIndex = -1;
+    this.matches = [];
+    this.highlighter = new TextLayerHighlighter();
+    this.options = {
+      caseSensitive: false,
+      wholeWords: false,
+      highlightAll: true,
+      ...options
+    };
+  }
+  /**
+   * Search across all text layers
+   */
+  search(query) {
+    this.clear();
+    if (!query.trim()) return [];
+    this.currentQuery = query;
+    const results = [];
+    const textLayers = document.querySelectorAll(".salina-pdf-text-layer");
+    textLayers.forEach((textLayer) => {
+      const pageNumber = parseInt(textLayer.dataset.pageNumber || "0");
+      const matches = this.searchInTextLayer(textLayer, query);
+      matches.forEach((match, index) => {
+        const bounds = this.getMatchBounds(match);
+        results.push({
+          pageNumber,
+          text: match.textContent,
+          position: bounds,
+          textIndex: results.length,
+          context: this.getMatchContext(match)
+        });
+      });
+      this.matches.push(...matches);
+    });
+    if (this.options.highlightAll && this.matches.length > 0) {
+      this.highlighter.highlightMatches(this.matches, true);
+    }
+    return results;
+  }
+  searchInTextLayer(textLayer, query) {
+    let searchQuery = query;
+    if (this.options.wholeWords) {
+    }
+    const matches = this.highlighter.findTextInLayer(
+      textLayer,
+      searchQuery,
+      this.options.caseSensitive
+    );
+    if (this.options.wholeWords) {
+      return matches.filter((match) => this.isWholeWordMatch(match));
+    }
+    return matches;
+  }
+  isWholeWordMatch(match) {
+    const { textDivs, begin, end } = match;
+    const startDiv = textDivs[0];
+    const startText = startDiv.textContent || "";
+    if (begin.offset > 0) {
+      const charBefore = startText[begin.offset - 1];
+      if (charBefore && /\w/.test(charBefore)) {
+        return false;
+      }
+    }
+    const endDiv = textDivs[textDivs.length - 1];
+    const endText = endDiv.textContent || "";
+    if (end.offset < endText.length) {
+      const charAfter = endText[end.offset];
+      if (charAfter && /\w/.test(charAfter)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  getMatchBounds(match) {
+    const rects = [];
+    match.textDivs.forEach((div) => {
+      const rect = div.getBoundingClientRect();
+      rects.push(rect);
+    });
+    if (rects.length === 0) {
+      return { x: 0, y: 0, width: 0, height: 0 };
+    }
+    const bounds = {
+      x: Math.min(...rects.map((r) => r.left)),
+      y: Math.min(...rects.map((r) => r.top)),
+      width: 0,
+      height: 0
+    };
+    const right = Math.max(...rects.map((r) => r.right));
+    const bottom = Math.max(...rects.map((r) => r.bottom));
+    bounds.width = right - bounds.x;
+    bounds.height = bottom - bounds.y;
+    const pageContainer = match.textDivs[0].closest("[data-page-number]");
+    if (pageContainer) {
+      const pageRect = pageContainer.getBoundingClientRect();
+      bounds.x -= pageRect.left;
+      bounds.y -= pageRect.top;
+    }
+    return bounds;
+  }
+  getMatchContext(match, contextLength = 30) {
+    const fullText = match.textDivs.map((div) => div.textContent || "").join("");
+    const matchText = match.textContent;
+    const matchStart = fullText.indexOf(matchText);
+    if (matchStart === -1) return matchText;
+    const contextStart = Math.max(0, matchStart - contextLength);
+    const contextEnd = Math.min(fullText.length, matchStart + matchText.length + contextLength);
+    let context = fullText.substring(contextStart, contextEnd);
+    if (contextStart > 0) context = "..." + context;
+    if (contextEnd < fullText.length) context = context + "...";
+    return context;
+  }
+  /**
+   * Navigate to next/previous match
+   */
+  nextMatch() {
+    if (this.matches.length === 0) return;
+    this.currentMatchIndex = (this.currentMatchIndex + 1) % this.matches.length;
+    this.highlighter.navigateToMatch(this.currentMatchIndex);
+  }
+  previousMatch() {
+    if (this.matches.length === 0) return;
+    this.currentMatchIndex = this.currentMatchIndex - 1;
+    if (this.currentMatchIndex < 0) {
+      this.currentMatchIndex = this.matches.length - 1;
+    }
+    this.highlighter.navigateToMatch(this.currentMatchIndex);
+  }
+  /**
+   * Clear search results and highlights
+   */
+  clear() {
+    this.highlighter.clearHighlights();
+    this.matches = [];
+    this.currentQuery = "";
+    this.currentMatchIndex = -1;
+  }
+  /**
+   * Update search options
+   */
+  setOptions(options) {
+    this.options = { ...this.options, ...options };
+    if (this.currentQuery) {
+      this.search(this.currentQuery);
+    }
+  }
+  /**
+   * Get current match information
+   */
+  getCurrentMatch() {
+    if (this.matches.length === 0) return null;
+    return {
+      index: this.currentMatchIndex + 1,
+      total: this.matches.length
+    };
+  }
+  destroy() {
+    this.clear();
+  }
+};
+
+// src/highlighting/SelectionHighlightEngine.ts
+var SelectionHighlightEngine = class {
+  constructor(options = {}) {
+    this.highlights = /* @__PURE__ */ new Map();
+    this.selectionHandler = null;
+    this.highlighter = new TextLayerHighlighter();
+    this.options = {
+      defaultColor: "yellow",
+      allowMultipleColors: true,
+      persistHighlights: true,
+      autoHighlight: false,
+      ...options
+    };
+    this.setupSelectionHandling();
+  }
+  setupSelectionHandling() {
+    if (!this.options.autoHighlight) return;
+    this.selectionHandler = (event) => {
+      const target = event.target;
+      if (!target.closest(".salina-pdf-text-layer")) return;
+      setTimeout(() => {
+        const selection = window.getSelection();
+        if (selection && selection.toString().trim()) {
+          this.createHighlightFromCurrentSelection();
+        }
+      }, 10);
+    };
+    document.addEventListener("mouseup", this.selectionHandler);
+  }
+  /**
+   * Create highlight from current browser selection
+   */
+  createHighlightFromCurrentSelection(color = this.options.defaultColor) {
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return null;
+    const selectionInfo = this.highlighter.getSelectionInfo(selection);
+    if (!selectionInfo) return null;
+    const range = selection.getRangeAt(0);
+    const container = range.commonAncestorContainer;
+    const textLayer = (container instanceof Element ? container : container.parentElement)?.closest(".salina-pdf-text-layer");
+    if (!textLayer) return null;
+    const pageNumber = parseInt(textLayer.dataset.pageNumber || "1");
+    const highlightId = this.highlighter.createHighlightFromSelection(selection, color);
+    if (!highlightId) return null;
+    const highlight = {
+      id: highlightId,
+      text: selectionInfo.text,
+      color,
+      position: this.rectsToPosition(selectionInfo.rects, textLayer),
+      pageNumber,
+      timestamp: Date.now(),
+      rects: selectionInfo.rects,
+      serializedRange: this.serializeRange(range)
+    };
+    this.highlights.set(highlightId, highlight);
+    this.addHighlightInteraction(highlightId);
+    this.emitHighlightEvent("create", highlight);
+    return highlight;
+  }
+  /**
+   * Convert DOMRects to position relative to page
+   */
+  rectsToPosition(rects, textLayer) {
+    if (rects.length === 0) {
+      return { x: 0, y: 0, width: 0, height: 0 };
+    }
+    const pageRect = textLayer.getBoundingClientRect();
+    const minX = Math.min(...rects.map((r) => r.left)) - pageRect.left;
+    const minY = Math.min(...rects.map((r) => r.top)) - pageRect.top;
+    const maxX = Math.max(...rects.map((r) => r.right)) - pageRect.left;
+    const maxY = Math.max(...rects.map((r) => r.bottom)) - pageRect.top;
+    return {
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY
+    };
+  }
+  /**
+   * Serialize a range for persistence
+   */
+  serializeRange(range) {
+    const startContainer = range.startContainer;
+    const endContainer = range.endContainer;
+    const startPath = this.getNodePath(startContainer);
+    const endPath = this.getNodePath(endContainer);
+    return JSON.stringify({
+      startPath,
+      startOffset: range.startOffset,
+      endPath,
+      endOffset: range.endOffset
+    });
+  }
+  /**
+   * Get path to a node for serialization
+   */
+  getNodePath(node) {
+    const path = [];
+    let current = node;
+    while (current && current.parentNode) {
+      const parent = current.parentNode;
+      const index = Array.from(parent.childNodes).indexOf(current);
+      path.unshift(index);
+      current = parent;
+      if (current instanceof Element && current.classList.contains("salina-pdf-text-layer")) {
+        break;
+      }
+    }
+    return path;
+  }
+  /**
+   * Restore highlights from serialized data
+   */
+  restoreHighlights(highlights) {
+    highlights.forEach((highlight) => {
+      if (highlight.serializedRange) {
+        try {
+          const range = this.deserializeRange(highlight.serializedRange, highlight.pageNumber);
+          if (range) {
+            const selection = window.getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+            this.highlighter.createHighlightFromSelection(
+              selection,
+              highlight.color,
+              highlight.id
+            );
+            selection?.removeAllRanges();
+            this.highlights.set(highlight.id, highlight);
+            this.addHighlightInteraction(highlight.id);
+          }
+        } catch (e) {
+          console.warn("Failed to restore highlight:", e);
+        }
+      }
+    });
+  }
+  /**
+   * Deserialize a range
+   */
+  deserializeRange(serialized, pageNumber) {
+    try {
+      const data = JSON.parse(serialized);
+      const textLayer = document.querySelector(
+        `[data-page-number="${pageNumber}"] .salina-pdf-text-layer`
+      );
+      if (!textLayer) return null;
+      const startNode = this.getNodeFromPath(textLayer, data.startPath);
+      const endNode = this.getNodeFromPath(textLayer, data.endPath);
+      if (!startNode || !endNode) return null;
+      const range = document.createRange();
+      range.setStart(startNode, data.startOffset);
+      range.setEnd(endNode, data.endOffset);
+      return range;
+    } catch (e) {
+      return null;
+    }
+  }
+  /**
+   * Get node from path
+   */
+  getNodeFromPath(root, path) {
+    let current = root;
+    for (const index of path) {
+      if (!current.childNodes[index]) return null;
+      current = current.childNodes[index];
+    }
+    return current;
+  }
+  /**
+   * Add interaction handlers to highlight
+   */
+  addHighlightInteraction(highlightId) {
+    const element = document.querySelector(`[data-highlight-id="${highlightId}"]`);
+    if (!element) return;
+    element.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const highlight = this.highlights.get(highlightId);
+      if (highlight) {
+        this.emitHighlightEvent("click", highlight);
+      }
+    });
+    element.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const highlight = this.highlights.get(highlightId);
+      if (highlight) {
+        this.emitHighlightEvent("contextmenu", highlight);
+      }
+    });
+    element.addEventListener("mouseenter", () => {
+      element.classList.add("salina-highlight-hover");
+    });
+    element.addEventListener("mouseleave", () => {
+      element.classList.remove("salina-highlight-hover");
+    });
+  }
+  /**
+   * Remove highlight
+   */
+  removeHighlight(highlightId) {
+    const highlight = this.highlights.get(highlightId);
+    if (!highlight) return;
+    this.highlighter.removeHighlight(highlightId);
+    this.highlights.delete(highlightId);
+    this.emitHighlightEvent("remove", highlight);
+  }
+  /**
+   * Update highlight color
+   */
+  updateHighlightColor(highlightId, color) {
+    const highlight = this.highlights.get(highlightId);
+    if (!highlight) return;
+    const element = document.querySelector(`[data-highlight-id="${highlightId}"]`);
+    if (element) {
+      element.style.backgroundColor = color;
+      highlight.color = color;
+      this.emitHighlightEvent("update", highlight);
+    }
+  }
+  /**
+   * Get all highlights
+   */
+  getHighlights() {
+    return Array.from(this.highlights.values());
+  }
+  /**
+   * Get highlights for a specific page
+   */
+  getPageHighlights(pageNumber) {
+    return Array.from(this.highlights.values()).filter(
+      (h) => h.pageNumber === pageNumber
+    );
+  }
+  /**
+   * Clear all highlights
+   */
+  clearHighlights() {
+    this.highlights.forEach((_, id) => {
+      this.highlighter.removeHighlight(id);
+    });
+    this.highlights.clear();
+  }
+  /**
+   * Emit highlight events
+   */
+  emitHighlightEvent(type, highlight) {
+    const event = new CustomEvent(`salina:highlight:${type}`, {
+      detail: { highlight },
+      bubbles: true
+    });
+    document.dispatchEvent(event);
+  }
+  /**
+   * Export highlights for persistence
+   */
+  exportHighlights() {
+    return this.getHighlights();
+  }
+  /**
+   * Import highlights
+   */
+  importHighlights(highlights) {
+    this.clearHighlights();
+    this.restoreHighlights(highlights);
+  }
+  destroy() {
+    if (this.selectionHandler) {
+      document.removeEventListener("mouseup", this.selectionHandler);
+    }
+    this.clearHighlights();
   }
 };
 
@@ -441,6 +1146,13 @@ var PDFRenderer = class {
   }
   async loadDocument(file) {
     try {
+      if (this.pdfDocument) {
+        try {
+          this.pdfDocument.destroy();
+        } catch (error) {
+          console.warn("PDFRenderer: Error destroying previous document:", error);
+        }
+      }
       const pdfjs = await loadPDFJS();
       let data;
       if (file instanceof File) {
@@ -456,6 +1168,10 @@ var PDFRenderer = class {
       await this.renderAllPages();
       return this.pdfDocument.numPages;
     } catch (error) {
+      if (error.name === "RenderingCancelledException") {
+        console.warn("PDFRenderer: Rendering was cancelled (expected during cleanup)");
+        throw new Error("PDF rendering was cancelled");
+      }
       throw new Error(`Failed to load PDF: ${error}`);
     }
   }
@@ -495,11 +1211,19 @@ var PDFRenderer = class {
     canvas.height = viewport.height;
     canvas.style.display = "block";
     pageContainer.appendChild(canvas);
-    const renderTask = page.render({
-      canvasContext: context,
-      viewport
-    });
-    await renderTask.promise;
+    try {
+      const renderTask = page.render({
+        canvasContext: context,
+        viewport
+      });
+      await renderTask.promise;
+    } catch (error) {
+      if (error.name === "RenderingCancelledException") {
+        console.warn(`PDFRenderer: Rendering cancelled for page ${pageNumber}`);
+        return pageContainer;
+      }
+      throw error;
+    }
     let textLayer = null;
     if (this.options.features.search || this.options.features.highlighting) {
       textLayer = await this.createTextLayer(page, viewport, pageContainer);
@@ -521,6 +1245,7 @@ var PDFRenderer = class {
     const textContent = await page.getTextContent();
     const textLayer = document.createElement("div");
     textLayer.className = "salina-pdf-text-layer";
+    textLayer.dataset.pageNumber = container.dataset.pageNumber || "1";
     textLayer.style.cssText = `
       position: absolute;
       top: 0;
@@ -639,11 +1364,19 @@ var PDFRenderer = class {
     }
   }
   destroy() {
-    if (this.pdfDocument) {
-      this.pdfDocument.destroy();
+    try {
+      if (this.container) {
+        this.container.innerHTML = "";
+      }
+      if (this.pdfDocument) {
+        this.pdfDocument.destroy();
+        this.pdfDocument = null;
+      }
+      this.pages.clear();
+      this.textContent = [];
+    } catch (error) {
+      console.warn("PDFRenderer: Error during destruction:", error);
     }
-    this.pages.clear();
-    this.textContent = [];
   }
   async extractTextContent() {
     if (!this.pdfDocument) return;
@@ -718,6 +1451,17 @@ var SalinaPDFViewer = class extends EventEmitter {
       caseSensitive: this.options.search.caseSensitive || false,
       wholeWords: this.options.search.wholeWords || false
     });
+    this.textLayerSearchEngine = new TextLayerSearchEngine({
+      caseSensitive: this.options.search.caseSensitive || false,
+      wholeWords: this.options.search.wholeWords || false,
+      highlightAll: true
+    });
+    this.selectionHighlightEngine = new SelectionHighlightEngine({
+      defaultColor: this.options.highlighting.defaultColor || "yellow",
+      allowMultipleColors: true,
+      persistHighlights: true,
+      autoHighlight: this.options.highlighting.enableManualHighlighting || false
+    });
     this.setupContainer();
     this.setupEventListeners();
     this.setupResizeObserver();
@@ -749,6 +1493,8 @@ var SalinaPDFViewer = class extends EventEmitter {
     this.pdfRenderer.destroy();
     this.simpleHighlighter.destroy();
     this.searchEngine.destroy();
+    this.textLayerSearchEngine.destroy();
+    this.selectionHighlightEngine.destroy();
     this.removeAllListeners();
     this.container.innerHTML = "";
   }
@@ -804,7 +1550,7 @@ var SalinaPDFViewer = class extends EventEmitter {
     const scale = this.pdfRenderer.calculateFitToHeightScale();
     this.setZoom(scale);
   }
-  // Search
+  // Search - Legacy method using coordinate-based highlighting
   search(query) {
     if (!query.trim()) {
       this.clearSearch();
@@ -823,6 +1569,22 @@ var SalinaPDFViewer = class extends EventEmitter {
     this.options.callbacks.onSearch?.(results);
     return results;
   }
+  // Search using PDF.js-style text layer highlighting
+  searchInTextLayer(query) {
+    if (!query.trim()) {
+      this.clearTextLayerSearch();
+      return [];
+    }
+    this.setState({ searchQuery: query });
+    const results = this.textLayerSearchEngine.search(query);
+    this.setState({
+      searchResults: results,
+      currentSearchIndex: results.length > 0 ? 0 : -1
+    });
+    this.emit("search:results", results);
+    this.options.callbacks.onSearch?.(results);
+    return results;
+  }
   clearSearch() {
     this.setState({
       searchQuery: "",
@@ -830,6 +1592,15 @@ var SalinaPDFViewer = class extends EventEmitter {
       currentSearchIndex: -1
     });
     this.searchEngine.clearResults();
+    this.emit("search:cleared");
+  }
+  clearTextLayerSearch() {
+    this.setState({
+      searchQuery: "",
+      searchResults: [],
+      currentSearchIndex: -1
+    });
+    this.textLayerSearchEngine.clear();
     this.emit("search:cleared");
   }
   nextSearchResult() {
@@ -846,35 +1617,76 @@ var SalinaPDFViewer = class extends EventEmitter {
     const result = this.state.searchResults[prevIndex];
     this.goToPage(result.pageNumber);
   }
+  // Text layer search navigation
+  nextTextLayerSearchResult() {
+    this.textLayerSearchEngine.nextMatch();
+  }
+  prevTextLayerSearchResult() {
+    this.textLayerSearchEngine.previousMatch();
+  }
+  getCurrentSearchMatch() {
+    return this.textLayerSearchEngine.getCurrentMatch();
+  }
   // Simple highlighting methods
   getActiveHighlight() {
     return this.simpleHighlighter.getActiveHighlight();
   }
   clearHighlights() {
     this.simpleHighlighter.clearHighlights();
+    this.selectionHighlightEngine.clearHighlights();
     this.emit("highlight:cleared");
   }
+  // Manual highlighting methods using browser selection
+  createHighlightFromSelection(color) {
+    const highlight = this.selectionHighlightEngine.createHighlightFromCurrentSelection(color);
+    if (highlight) {
+      this.emit("highlight:created", highlight);
+      return true;
+    }
+    return false;
+  }
+  removeHighlight(highlightId) {
+    this.selectionHighlightEngine.removeHighlight(highlightId);
+    this.emit("highlight:removed", highlightId);
+  }
+  updateHighlightColor(highlightId, color) {
+    this.selectionHighlightEngine.updateHighlightColor(highlightId, color);
+    this.emit("highlight:updated", highlightId, color);
+  }
+  getHighlights() {
+    return this.selectionHighlightEngine.getHighlights();
+  }
+  getPageHighlights(pageNumber) {
+    return this.selectionHighlightEngine.getPageHighlights(pageNumber);
+  }
+  exportHighlights() {
+    return this.selectionHighlightEngine.exportHighlights();
+  }
+  importHighlights(highlights) {
+    this.selectionHighlightEngine.importHighlights(highlights);
+    this.emit("highlights:imported", highlights.length);
+  }
   // Legacy API methods for compatibility (simplified)
-  addHighlight() {
+  addSimpleHighlight() {
     console.warn(
-      "addHighlight: Simple highlighter only supports mouse-based highlighting"
+      "addSimpleHighlight: Simple highlighter only supports mouse-based highlighting"
     );
   }
-  removeHighlight() {
+  removeSimpleHighlight() {
     this.clearHighlights();
     return true;
   }
-  getHighlights() {
+  getSimpleHighlights() {
     const active = this.getActiveHighlight();
     return active ? [active] : [];
   }
-  exportHighlights() {
+  exportSimpleHighlights() {
     const active = this.getActiveHighlight();
     return JSON.stringify(active ? [active] : [], null, 2);
   }
-  importHighlights() {
+  importSimpleHighlights() {
     console.warn(
-      "importHighlights: Simple highlighter doesn't support highlight importing"
+      "importSimpleHighlights: Simple highlighter doesn't support highlight importing"
     );
   }
   // Plugin System
@@ -1051,6 +1863,201 @@ var SalinaPDFViewer = class extends EventEmitter {
       });
       this.resizeObserver.observe(this.container);
     }
+  }
+};
+
+// src/highlighting/HighlightEngine.ts
+var HighlightEngine = class {
+  constructor(options) {
+    this.highlights = /* @__PURE__ */ new Map();
+    this.highlightElements = /* @__PURE__ */ new Map();
+    this.scale = 1;
+    this.options = options;
+    console.log("HighlightEngine initialized with options:", options);
+  }
+  addHighlight(highlight) {
+    this.highlights.set(highlight.id, highlight);
+    this.renderHighlight(highlight);
+  }
+  removeHighlight(id) {
+    this.highlights.delete(id);
+    const element = this.highlightElements.get(id);
+    if (element) {
+      element.remove();
+      this.highlightElements.delete(id);
+    }
+  }
+  clearHighlights() {
+    this.highlights.clear();
+    this.highlightElements.forEach((element) => element.remove());
+    this.highlightElements.clear();
+  }
+  updateScale(scale) {
+    this.scale = scale;
+    this.highlights.forEach((highlight) => this.renderHighlight(highlight));
+  }
+  getHighlights() {
+    return Array.from(this.highlights.values());
+  }
+  getHighlightById(id) {
+    return this.highlights.get(id);
+  }
+  destroy() {
+    this.clearHighlights();
+  }
+  /**
+   * Handle viewport changes (scroll, resize) to maintain highlight accuracy
+   */
+  handleViewportChange() {
+    this.highlights.forEach((highlight) => this.renderHighlight(highlight));
+  }
+  /**
+   * Optimize highlight rendering by only updating visible highlights
+   */
+  updateVisibleHighlights() {
+    const viewportRect = {
+      top: window.scrollY,
+      bottom: window.scrollY + window.innerHeight,
+      left: window.scrollX,
+      right: window.scrollX + window.innerWidth
+    };
+    this.highlights.forEach((highlight, id) => {
+      const element = this.highlightElements.get(id);
+      if (element) {
+        const elementRect = element.getBoundingClientRect();
+        const isVisible = !(elementRect.bottom < viewportRect.top || elementRect.top > viewportRect.bottom || elementRect.right < viewportRect.left || elementRect.left > viewportRect.right);
+        if (isVisible) {
+          this.renderHighlight(highlight);
+        }
+      }
+    });
+  }
+  /**
+   * Get comprehensive positioning information for a page
+   */
+  getPositionInfo(pageNumber) {
+    const pageContainer = document.querySelector(
+      `[data-page-number="${pageNumber}"]`
+    );
+    if (!pageContainer) return null;
+    const textLayer = pageContainer.querySelector(".textLayer") || pageContainer.querySelector(".react-pdf__Page__textContent") || pageContainer.querySelector(".salina-pdf-text-layer");
+    const containerRect = pageContainer.getBoundingClientRect();
+    const textLayerRect = textLayer?.getBoundingClientRect() || null;
+    const viewerContainer = pageContainer.closest(".salina-pdf-viewer, .pdf-container, .pdf-viewer");
+    const scrollOffset = {
+      x: viewerContainer?.scrollLeft || 0,
+      y: viewerContainer?.scrollTop || 0
+    };
+    return {
+      pageContainer,
+      textLayer,
+      containerRect,
+      textLayerRect,
+      scrollOffset
+    };
+  }
+  /**
+   * Calculate accurate highlight position with proper coordinate transformation
+   */
+  renderHighlight(highlight) {
+    const existingElement = this.highlightElements.get(highlight.id);
+    if (existingElement) {
+      existingElement.remove();
+    }
+    const positionInfo = this.getPositionInfo(highlight.pageNumber);
+    if (!positionInfo) return;
+    const { pageContainer, textLayer, containerRect, textLayerRect, scrollOffset } = positionInfo;
+    const highlightElement = document.createElement("div");
+    highlightElement.className = "salina-highlight";
+    highlightElement.setAttribute("data-highlight-id", highlight.id);
+    highlightElement.title = highlight.text;
+    const scaledPosition = {
+      x: highlight.position.x * this.scale,
+      y: highlight.position.y * this.scale,
+      width: highlight.position.width * this.scale,
+      height: highlight.position.height * this.scale
+    };
+    Object.assign(highlightElement.style, {
+      position: "absolute",
+      left: `${scaledPosition.x}px`,
+      top: `${scaledPosition.y}px`,
+      width: `${scaledPosition.width}px`,
+      height: `${scaledPosition.height}px`,
+      backgroundColor: highlight.color,
+      pointerEvents: "auto",
+      borderRadius: "2px",
+      zIndex: "10",
+      mixBlendMode: "multiply",
+      opacity: "0.4",
+      transition: "opacity 0.2s ease, transform 0.2s ease",
+      cursor: "pointer",
+      // Add a subtle outline to improve visibility
+      outline: "1px solid transparent",
+      boxSizing: "border-box"
+    });
+    highlightElement.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.handleHighlightClick(highlight);
+    });
+    highlightElement.addEventListener("mouseenter", () => {
+      highlightElement.style.opacity = "0.6";
+      highlightElement.style.transform = "scale(1.01)";
+      highlightElement.style.outline = "1px solid rgba(0, 123, 255, 0.3)";
+    });
+    highlightElement.addEventListener("mouseleave", () => {
+      highlightElement.style.opacity = "0.4";
+      highlightElement.style.transform = "scale(1)";
+      highlightElement.style.outline = "1px solid transparent";
+    });
+    pageContainer.appendChild(highlightElement);
+    this.highlightElements.set(highlight.id, highlightElement);
+  }
+  /**
+   * Create highlight from text selection with accurate coordinate calculation
+   */
+  createHighlightFromSelection(selection, pageNumber, color = this.options.defaultColor) {
+    if (!selection.rangeCount) return null;
+    const range = selection.getRangeAt(0);
+    const text = selection.toString().trim();
+    if (!text) return null;
+    const positionInfo = this.getPositionInfo(pageNumber);
+    if (!positionInfo) return null;
+    const { pageContainer, containerRect } = positionInfo;
+    const rects = range.getClientRects();
+    const highlights = [];
+    Array.from(rects).forEach((rect, index) => {
+      if (rect.width > 0 && rect.height > 0) {
+        const relativeX = rect.left - containerRect.left;
+        const relativeY = rect.top - containerRect.top;
+        const normalizedPosition = {
+          x: relativeX / this.scale,
+          y: relativeY / this.scale,
+          width: rect.width / this.scale,
+          height: rect.height / this.scale
+        };
+        const highlight = {
+          id: this.generateHighlightId(),
+          text,
+          color,
+          position: normalizedPosition,
+          pageNumber,
+          timestamp: Date.now()
+        };
+        highlights.push(highlight);
+        this.addHighlight(highlight);
+      }
+    });
+    return highlights.length > 0 ? highlights : null;
+  }
+  generateHighlightId() {
+    return `highlight_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+  handleHighlightClick(highlight) {
+    const event = new CustomEvent("salina:highlight:click", {
+      detail: { highlight },
+      bubbles: true
+    });
+    document.dispatchEvent(event);
   }
 };
 
@@ -1342,12 +2349,16 @@ var VirtualScrolling = class {
 // src/index.ts
 var VERSION = "3.0.2";
 export {
+  HighlightEngine,
   MemoryManager,
   PDFRenderer,
   PerformanceOptimizer,
   SalinaPDFViewer,
   SearchEngine,
+  SelectionHighlightEngine,
   SimpleHighlighter,
+  TextLayerHighlighter,
+  TextLayerSearchEngine,
   VERSION,
   VirtualScrolling,
   clamp,
